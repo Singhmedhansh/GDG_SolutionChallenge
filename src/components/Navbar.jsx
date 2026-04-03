@@ -1,73 +1,121 @@
+import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 const navStyle = {
-  background: '#0d1424',
-  borderBottom: '1px solid #1e293b',
-  padding: '0 2rem',
-  height: '60px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
   position: 'sticky',
   top: 0,
   zIndex: 100,
-  fontFamily: "'IBM Plex Mono', monospace",
+  width: '100%',
+  height: '60px',
+  padding: '0 2rem',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  backdropFilter: 'blur(12px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+  background: 'rgba(255, 255, 255, 0.75)',
+  borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
+  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
 }
 
-const logoStyle = {
+const logoWrapStyle = {
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
-  fontWeight: 700,
-  fontSize: '1.1rem',
-  color: '#f1f5f9',
-  letterSpacing: '0.05em',
 }
 
 const pulseStyle = {
-  width: '10px',
-  height: '10px',
+  width: '9px',
+  height: '9px',
   borderRadius: '50%',
   background: '#ef4444',
-  animation: 'pulse 1.5s infinite',
+  animation: 'pulse 2s ease infinite',
+}
+
+const logoTextStyle = {
+  fontFamily: "'IBM Plex Mono', monospace",
+  fontWeight: 700,
+  fontSize: '1rem',
+  color: '#0f172a',
+  letterSpacing: '0.02em',
+  textDecoration: 'none',
+  cursor: 'pointer',
 }
 
 const linksStyle = {
   display: 'flex',
+  alignItems: 'center',
   gap: '2rem',
   listStyle: 'none',
+  margin: 0,
+  padding: 0,
 }
 
 export default function Navbar() {
   const location = useLocation()
 
-  const linkStyle = (path) => ({
-    color: location.pathname === path ? '#f59e0b' : '#94a3b8',
-    borderBottom: location.pathname === path ? '2px solid #f59e0b' : '2px solid transparent',
-    paddingBottom: '2px',
-    fontSize: '0.85rem',
-    letterSpacing: '0.05em',
-    transition: 'color 0.2s',
-  })
+  useEffect(() => {
+    const fontLinkId = 'fairscan-navbar-fonts'
+    if (document.getElementById(fontLinkId)) return
+
+    const link = document.createElement('link')
+    link.id = fontLinkId
+    link.rel = 'stylesheet'
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap'
+    document.head.appendChild(link)
+  }, [])
+
+  const linkStyle = (path) => {
+    const isActive = location.pathname === path
+    return {
+      fontFamily: "'Inter', sans-serif",
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      color: isActive ? '#2563eb' : '#64748b',
+      paddingBottom: '2px',
+      borderBottom: isActive ? '2px solid #2563eb' : '2px solid transparent',
+      transition: 'color 0.2s, border-color 0.2s',
+      textDecoration: 'none',
+    }
+  }
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap');
+
         @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.3); }
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: scale(1.2);
+          }
+        }
+
+        .navbar-link:hover {
+          color: #0f172a;
         }
       `}</style>
+
       <nav style={navStyle}>
-        <div style={logoStyle}>
+        <div style={logoWrapStyle}>
           <div style={pulseStyle} />
-          FairScan
+          <Link to="/" style={logoTextStyle}>FairScan</Link>
         </div>
+
         <ul style={linksStyle}>
-          <li><Link to="/" style={linkStyle('/')}>Home</Link></li>
-          <li><Link to="/analyze" style={linkStyle('/analyze')}>Analyze</Link></li>
-          <li><Link to="/report" style={linkStyle('/report')}>Report</Link></li>
+          <li>
+            <Link className="navbar-link" to="/" style={linkStyle('/')}>Home</Link>
+          </li>
+          <li>
+            <Link className="navbar-link" to="/analyze" style={linkStyle('/analyze')}>Analyze</Link>
+          </li>
+          <li>
+            <Link className="navbar-link" to="/report" style={linkStyle('/report')}>Report</Link>
+          </li>
         </ul>
       </nav>
     </>
