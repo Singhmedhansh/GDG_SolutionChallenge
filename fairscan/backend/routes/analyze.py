@@ -41,6 +41,34 @@ class AnalyzeResponse(BaseModel):
     flaggedProxies: List[str]
     recommendations: List[str]
 
+class DebiasRequest(BaseModel):
+    model_file: str
+    dataset_csv: str
+    protected_attributes: List[str]
+    fairness_metric: str
+    penalty_weight: float = 0.5
+
+class DebiasResponse(BaseModel):
+    original_fairness_score: float
+    debiased_fairness_score: float
+    improvement_percent: float
+    debiased_model: str
+    explanation: str
+class JobPostingRequest(BaseModel):
+    job_description: str
+
+class BiasFlag(BaseModel):
+    type: str
+    severity: str
+    example: str
+    explanation: str
+
+class JobPostingResponse(BaseModel):
+    bias_flags: List[BiasFlag]
+    overall_risk: str
+    suggestions: List[str]
+    rewritten_job: str
+
 
 # ── Helper: Decode CSV ───────────────────────────────────
 def decode_csv(csvData: str) -> pd.DataFrame:
@@ -221,3 +249,63 @@ async def analyze(request: AnalyzeRequest):
         flaggedProxies=proxies,
         recommendations=recs
     )
+
+
+@router.post("/debias-model", response_model=DebiasResponse)
+async def debias_model_endpoint(request: DebiasRequest):
+    try:
+        from services.debiasing import (
+            load_model, apply_demographic_parity, apply_equalized_odds,
+            apply_fairness_penalty, evaluate_fairness_before_after, return_debiased_model
+        )
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Debiasing service is not available.")
+
+    try:
+        model_bytes = base64.b64decode(request.model_file)
+        model = load_model(model_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid model file format: {str(e)}")
+
+    try:
+        df = decode_csv(request.dataset_csv)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid dataset format.")
+
+    # We assume the label column is the last column or named "label"/"decision" (we should just use the last column for now if not provided, wait, request model didn't ask for decision column)
+    # Actually, we can get target from training data, typically the last column
+    # Let's check attributes
+    missing = [c for c in request.protected_attributes if c not in df.columns]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Protected attributes not found in dataset: {missing}")
+    
+    # We will assume label is the last column
+    target_col = df.columns[-1]
+    y = df[target_col]
+    X = df.drop(columns=[target_col])
+    
+    protected_attr = df[request.protected_attributes[0]] if request.protected_attributes else None
+    if protected_attr is None:
+        raise HTTPException(status_code=400, detail="At least one protected attribute is required.")
+
+    # Apply constraint
+    try:
+        if request.fairness_metric == "demographic_parity":
+            debiased_model = apply_demographic_parity(model, X, y, protected_attr)
+        elif request.fairness_metric == "equalized_odds":
+            debiased_model = apply_equalized_odds(model, X, y, protected_attr)
+        else: # including calibration and penalty 
+            debiased_model = apply_fairness_penalty(model, X, y, protected_attr, request.penalty_weight)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to apply debiasing: {str(e)}")
+
+    metrics = evaluate_fairness_before_after(model, debiased_model, X, y, protected_attr)
+    debiased_b64 = return_debiased_model(debiased_model)
+
+    return DebiasResponse(
+        original_fairness_score=metrics["original_fairness_score"],
+        debiased_fairness_score=metrics["debiased_fairness_score"],
+        improvement_percent=metrics["improvement_percent"],
+        debiased_model=debiased_b64,
+        explanation=f"Successfully applied {request.fairness_metric} constraint. Improved score by {metrics['improvement_percent']}%."
+    )

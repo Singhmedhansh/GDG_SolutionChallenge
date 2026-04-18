@@ -28,7 +28,6 @@ const TEAM = [
     name: 'Medhansh Singh',
     github: 'Singhmedhansh',
     role: 'Frontend Engineer',
-    days: 'Days 1–5, 10',
     description: 'Built the entire React frontend — Landing Page, Analysis flow, Report Page, animations, and design system.',
     color: blue,
   },
@@ -36,15 +35,13 @@ const TEAM = [
     name: 'Tanmay Angarkar',
     github: 'angarkartanmay-ops',
     role: 'Backend Engineer',
-    days: 'Days 6–10',
     description: 'Built the FastAPI backend, bias calculation logic, Gemini AI integration, and explainability layer.',
     color: '#7c3aed',
   },
   {
-    name: 'Teammate 3',
+    name: 'Jai Sharma',
     github: '',
     role: 'ML / Explainability',
-    days: 'Days 11–15',
     description: 'ML explainability improvements, SHAP analysis, and final submission polish.',
     color: '#059669',
   },
@@ -320,13 +317,7 @@ export default function AboutPage() {
                   }}>
                     {member.role}
                   </span>
-                  <span style={{
-                    fontFamily: fontMono, fontSize: '0.65rem', color: '#94a3b8',
-                    background: bg, border: `1px solid ${border}`,
-                    borderRadius: 999, padding: '3px 10px',
-                  }}>
-                    {member.days}
-                  </span>
+
                 </div>
 
                 <p style={{ color: textMuted, fontSize: '0.85rem', lineHeight: 1.65, margin: '0 0 14px' }}>
