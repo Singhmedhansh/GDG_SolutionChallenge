@@ -308,4 +308,42 @@ async def debias_model_endpoint(request: DebiasRequest):
         improvement_percent=metrics["improvement_percent"],
         debiased_model=debiased_b64,
         explanation=f"Successfully applied {request.fairness_metric} constraint. Improved score by {metrics['improvement_percent']}%."
+    )
+
+@router.post("/scan-job-posting", response_model=JobPostingResponse)
+async def scan_job_posting_endpoint(request: JobPostingRequest):
+    if not request.job_description or not request.job_description.strip():
+        raise HTTPException(status_code=400, detail="Job description cannot be empty.")
+        
+    try:
+        from services.gemini import scan_job_posting_for_bias, rewrite_job_for_fairness
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Gemini service is not available.")
+        
+    # Phase 1: Scan
+    scan_result = scan_job_posting_for_bias(request.job_description)
+    
+    # Phase 2: Rewrite
+    rewritten_job = request.job_description
+    bias_flags = scan_result.get("bias_flags", [])
+    if bias_flags:
+        rewritten_job = rewrite_job_for_fairness(request.job_description, bias_flags)
+        
+    # Build list of parsed bias flags
+    parsed_flags = []
+    for flag in bias_flags:
+        parsed_flags.append(
+            BiasFlag(
+                type=flag.get("type", "Unknown"),
+                severity=flag.get("severity", "low"),
+                example=flag.get("example", ""),
+                explanation=flag.get("explanation", "")
+            )
+        )
+        
+    return JobPostingResponse(
+        bias_flags=parsed_flags,
+        overall_risk=scan_result.get("overall_risk", "low"),
+        suggestions=scan_result.get("suggestions", []),
+        rewritten_job=rewritten_job
     )
