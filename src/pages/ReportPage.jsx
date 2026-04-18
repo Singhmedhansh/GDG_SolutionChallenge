@@ -571,6 +571,21 @@ export default function ReportPage() {
               </div>
             ))}
           </motion.div>
+          
+          {/* DEBIAS CTA */}
+          <div style={{ marginTop: '24px', textAlign: 'center' }}>
+            <button
+              onClick={() => navigate('/debias')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '8px',
+                padding: '12px 24px', background: '#eff6ff', border: '1px solid #bfdbfe',
+                color: '#2563eb', borderRadius: '8px', fontFamily: "'Inter', sans-serif",
+                fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              Have a trained model? Debias it here <ArrowRight size={16} />
+            </button>
+          </div>
         </div>
 
         {/* ── FOOTER ACTIONS ── */}
