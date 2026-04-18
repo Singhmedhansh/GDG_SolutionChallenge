@@ -116,6 +116,9 @@ export default function Navbar() {
           <li>
             <Link className="navbar-link" to="/report" style={linkStyle('/report')}>Report</Link>
           </li>
+          <li>
+            <Link className="navbar-link" to="/about" style={linkStyle('/about')}>About</Link>
+          </li>
         </ul>
       </nav>
     </>

@@ -185,6 +185,21 @@ export default function LandingPage() {
           >
             View Demo Report
           </motion.button>
+
+          <motion.a
+            href="/demo_hiring.csv"
+            download="demo_hiring.csv"
+            whileHover={{ scale: 1.01 }}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              fontFamily: fontInter, fontWeight: 500, fontSize: '0.9rem',
+              padding: '13px 28px', border: `1px solid ${blueBorder}`,
+              borderRadius: 8, background: blueBg, color: blue,
+              cursor: 'pointer', textDecoration: 'none'
+            }}
+          >
+            Download Demo CSV
+          </motion.a>
         </motion.div>
 
         {/* Stats */}

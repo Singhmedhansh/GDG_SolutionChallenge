@@ -7,6 +7,8 @@ import Papa from 'papaparse'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Upload, FileText, ChevronRight, AlertCircle, CheckCircle2, X } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
+import { analyzeDataset } from '../services/api'
+import { useResults } from '../context/ResultsContext'
 
 const bg = '#f8fafc'
 const card = '#ffffff'
@@ -82,6 +84,7 @@ function StepIndicator({ currentStep }) {
 
 export default function AnalysisPage() {
   const navigate = useNavigate()
+  const { setResults } = useResults()
   const [currentStep, setCurrentStep] = useState(1)
   const [file, setFile] = useState(null)
   const [columns, setColumns] = useState([])
@@ -192,20 +195,32 @@ export default function AnalysisPage() {
     valueContainer: (base) => ({ ...base, padding: '2px 12px' }),
   }
 
-  const runScan = () => {
+  const runScan = async () => {
     if (!decisionColumn) {
       toast.error('Select a decision column before running the scan.')
       return
     }
 
     setIsScanning(true)
-    toast.loading('Running bias analysis...', { id: 'scan' })
+    const toastId = toast.loading('Running bias analysis...')
 
-    window.setTimeout(() => {
-      toast.success('Analysis complete!', { id: 'scan' })
-      setIsScanning(false)
+    try {
+      const data = await analyzeDataset(file, decisionColumn, protectedAttributes)
+      setResults(data)
+      toast.success('Analysis complete!', { id: toastId })
       navigate('/report')
-    }, 2500)
+    } catch (err) {
+      console.error('Scan failed:', err)
+      // Backend might be down — store null and navigate with mock data
+      toast.error(
+        `Backend error: ${err.message || 'Could not connect to server'}. Showing demo results.`,
+        { id: toastId, duration: 4000 },
+      )
+      setResults(null) // ReportPage will fall back to mockResults
+      setTimeout(() => navigate('/report'), 1500)
+    } finally {
+      setIsScanning(false)
+    }
   }
 
   const clearFile = () => {

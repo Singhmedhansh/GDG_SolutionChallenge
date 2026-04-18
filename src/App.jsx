@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
+import { ResultsProvider } from './context/ResultsContext'
 import Navbar from './components/Navbar'
 import LandingPage from './pages/LandingPage'
 import AnalysisPage from './pages/AnalysisPage'
 import ReportPage from './pages/ReportPage'
+import AboutPage from './pages/AboutPage'
 
 function AnimatedRoutes() {
   const location = useLocation()
@@ -21,6 +23,7 @@ function AnimatedRoutes() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/analyze" element={<AnalysisPage />} />
           <Route path="/report" element={<ReportPage />} />
+          <Route path="/about" element={<AboutPage />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
@@ -30,10 +33,12 @@ function AnimatedRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <div style={{ background: '#f8fafc', minHeight: '100vh' }}>
-        <Navbar />
-        <AnimatedRoutes />
-      </div>
+      <ResultsProvider>
+        <div style={{ background: '#f8fafc', minHeight: '100vh' }}>
+          <Navbar />
+          <AnimatedRoutes />
+        </div>
+      </ResultsProvider>
     </BrowserRouter>
   )
 }
