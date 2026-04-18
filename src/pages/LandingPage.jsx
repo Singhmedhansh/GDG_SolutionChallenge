@@ -200,6 +200,18 @@ export default function LandingPage() {
           >
             Download Demo CSV
           </motion.a>
+
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            onClick={() => navigate('/jobposting')}
+            style={{
+              fontFamily: fontInter, fontWeight: 500, fontSize: '0.9rem',
+              padding: '13px 28px', border: `1px solid #c084fc`,
+              borderRadius: 8, background: '#faf5ff', color: '#9333ea', cursor: 'pointer'
+            }}
+          >
+            Scan Job Posting
+          </motion.button>
         </motion.div>
 
         {/* Stats */}
