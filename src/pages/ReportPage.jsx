@@ -16,6 +16,8 @@ import {
   TrendingUp,
   Wand2,
   GitCompareArrows,
+  Link2,
+  Zap,
 } from 'lucide-react'
 import { Component } from 'react'
 import { useResults } from '../context/ResultsContext'
@@ -196,6 +198,189 @@ function InfluenceTable({ factors }) {
   )
 }
 
+// ── Proxy normalization (supports legacy string[] and enriched objects) ─
+function normalizeProxies(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.map((item) => {
+    if (typeof item === 'string') {
+      return { column: item, correlatesWith: null, correlation: null, explanation: null }
+    }
+    return {
+      column: item.column ?? item.name ?? 'unknown',
+      correlatesWith: item.correlatesWith ?? item.correlates_with ?? null,
+      correlation: item.correlation ?? item.pearson ?? null,
+      explanation: item.explanation ?? item.reason ?? null,
+    }
+  })
+}
+
+function correlationTone(r) {
+  const abs = Math.abs(Number(r) || 0)
+  if (abs >= 0.6) return { label: 'Strong', color: '#ef4444', bg: '#fef2f2', border: '#fecaca' }
+  if (abs >= 0.3) return { label: 'Moderate', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' }
+  return { label: 'Weak', color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' }
+}
+
+// ── Key Insight Card ───────────────────────────────────────
+function KeyInsightCard({ proxies }) {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: '-60px' })
+
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 30 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
+      transition={{ type: 'spring', stiffness: 80, damping: 18 }}
+      style={{
+        position: 'relative',
+        marginBottom: 24,
+        borderRadius: 16,
+        padding: '2px',
+        background: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 45%, #7c3aed 100%)',
+        boxShadow: '0 18px 40px rgba(239, 68, 68, 0.18)',
+      }}
+    >
+      <div style={{
+        background: '#ffffff',
+        borderRadius: 14,
+        padding: '24px 26px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: 10,
+            background: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
+            color: '#ffffff',
+          }}>
+            <Zap size={18} />
+          </div>
+          <div style={{
+            fontFamily: "'IBM Plex Mono', monospace",
+            fontSize: '0.68rem', letterSpacing: '0.18em',
+            textTransform: 'uppercase', color: '#ef4444', fontWeight: 700,
+          }}>
+            Key Insight — Hidden Proxy Columns
+          </div>
+        </div>
+        <p style={{
+          margin: '6px 0 18px', color: '#475569', fontSize: '0.92rem', lineHeight: 1.6,
+        }}>
+          Columns that look neutral but carry protected-attribute signal. Removing the protected
+          column isn't enough — these proxies let bias sneak back in.
+        </p>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: proxies.length > 1 ? 'repeat(auto-fit, minmax(260px, 1fr))' : '1fr',
+          gap: 14,
+        }}>
+          {proxies.map((proxy, i) => {
+            const tone = correlationTone(proxy.correlation)
+            const rValue = proxy.correlation != null
+              ? Number(proxy.correlation).toFixed(2)
+              : '—'
+            return (
+              <motion.div
+                key={proxy.column}
+                initial={{ opacity: 0, y: 12 }}
+                animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+                transition={{ type: 'spring', stiffness: 90, damping: 18, delay: 0.1 + i * 0.08 }}
+                style={{
+                  position: 'relative',
+                  background: '#ffffff',
+                  border: `1px solid ${tone.border}`,
+                  borderRadius: 12,
+                  padding: '16px 18px',
+                  display: 'flex', flexDirection: 'column', gap: 10,
+                }}
+              >
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                }}>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '0.95rem', fontWeight: 700, color: '#0f172a',
+                  }}>
+                    <Flag size={14} color="#f59e0b" />
+                    {proxy.column}
+                  </div>
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '3px 10px', borderRadius: 999,
+                    background: tone.bg, color: tone.color,
+                    border: `1px solid ${tone.border}`,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', whiteSpace: 'nowrap',
+                  }}>
+                    {tone.label}
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+                }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '0.78rem', color: '#475569',
+                  }}>
+                    <Link2 size={12} color="#64748b" />
+                    <span style={{ color: '#0f172a', fontWeight: 600, textTransform: 'capitalize' }}>
+                      {proxy.column}
+                    </span>
+                    <span>↔</span>
+                    <span style={{ color: '#0f172a', fontWeight: 600, textTransform: 'capitalize' }}>
+                      {proxy.correlatesWith ?? 'protected attribute'}
+                    </span>
+                  </div>
+                  <div style={{
+                    marginLeft: 'auto',
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '1.25rem', fontWeight: 800, color: tone.color,
+                    letterSpacing: '-0.01em',
+                  }}>
+                    r = {rValue}
+                  </div>
+                </div>
+
+                {proxy.explanation && (
+                  <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    display: 'flex', gap: 8, alignItems: 'flex-start',
+                  }}>
+                    <Sparkles size={14} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                    <p style={{
+                      margin: 0, color: '#78350f',
+                      fontSize: '0.82rem', lineHeight: 1.55,
+                    }}>
+                      {proxy.explanation}
+                    </p>
+                  </div>
+                )}
+
+                {!proxy.explanation && proxy.correlation == null && (
+                  <div style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: '0.7rem', color: '#94a3b8',
+                  }}>
+                    Correlation and explanation unavailable — backend returned only the column name.
+                  </div>
+                )}
+              </motion.div>
+            )
+          })}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 // ── Error Boundary ─────────────────────────────────────────
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -240,18 +425,17 @@ export default function ReportPage() {
   const summaryRef = useRef(null)
   const geminiRef = useRef(null)
   const breakdownRef = useRef(null)
-  const proxiesRef = useRef(null)
   const recommendationsRef = useRef(null)
 
   const headerInView = useInView(headerRef, { once: true, margin: '-60px' })
   const summaryInView = useInView(summaryRef, { once: true, margin: '-60px' })
   const geminiInView = useInView(geminiRef, { once: true, margin: '-60px' })
   const breakdownInView = useInView(breakdownRef, { once: true, margin: '-60px' })
-  const proxiesInView = useInView(proxiesRef, { once: true, margin: '-60px' })
   const recommendationsInView = useInView(recommendationsRef, { once: true, margin: '-60px' })
 
   const scoreTone = getScoreTone(data.fairnessScore)
   const isUsingMock = !apiResults
+  const normalizedProxies = normalizeProxies(data.flaggedProxies)
 
   const handleDownloadReport = () => {
     const report = {
@@ -433,21 +617,26 @@ export default function ReportPage() {
               </div>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {data.flaggedProxies.map((proxy) => (
+              {normalizedProxies.map((proxy) => (
                 <span
-                  key={proxy}
+                  key={proxy.column}
                   style={{
                     background: '#fffbeb', border: '1px solid #fde68a',
                     color: '#92400e', fontFamily: "'IBM Plex Mono', monospace",
                     fontSize: '0.65rem', borderRadius: '999px', padding: '3px 10px',
                   }}
                 >
-                  {proxy}
+                  {proxy.column}
                 </span>
               ))}
             </div>
           </motion.div>
         </motion.div>
+
+        {/* ── KEY INSIGHT: Proxy Columns (our differentiator) ── */}
+        {normalizedProxies.length > 0 && (
+          <KeyInsightCard proxies={normalizedProxies} />
+        )}
 
         {/* ── HERO CTA: Fix This Bias / View Comparison ── */}
         <motion.div
@@ -600,43 +789,6 @@ export default function ReportPage() {
               <GroupTable groupDetails={item.groupDetails} />
             </motion.div>
           ))}
-        </div>
-
-        {/* ── FLAGGED PROXIES ── */}
-        <div ref={proxiesRef} style={{ marginBottom: '24px' }}>
-          <div style={pageStyles.sectionLabel}>Flagged Proxy Columns</div>
-          <div style={pageStyles.sectionTitle}>These columns appear neutral but may encode protected attributes</div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={proxiesInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 30 }}
-            transition={{ type: 'spring', stiffness: 80, damping: 18 }}
-            style={{ ...pageStyles.card, padding: '24px' }}
-          >
-            {data.flaggedProxies.map((proxy, index) => (
-              <div
-                key={proxy}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  gap: '12px', padding: '10px 0',
-                  borderBottom: index === data.flaggedProxies.length - 1 ? 'none' : '1px solid #f1f5f9',
-                }}
-              >
-                <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '8px',
-                  color: '#92400e', fontFamily: "'IBM Plex Mono', monospace",
-                  fontSize: '0.72rem', borderRadius: '4px', padding: '3px 8px',
-                  background: '#fffbeb', border: '1px solid #fde68a',
-                }}>
-                  <Flag size={12} />
-                  {proxy}
-                </div>
-                <div style={{ color: '#64748b', fontSize: '0.875rem' }}>
-                  Correlates with protected attributes — consider removing or re-weighting
-                </div>
-              </div>
-            ))}
-          </motion.div>
         </div>
 
         {/* ── RECOMMENDATIONS ── */}

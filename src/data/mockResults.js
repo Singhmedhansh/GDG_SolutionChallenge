@@ -83,7 +83,24 @@ export const mockResults = {
       'No significant racial bias was detected. Both groups show nearly identical approval rates (71% and 69%), ' +
       'with a Demographic Parity Difference of only 0.02 — well below the 0.10 threshold.',
   },
-  flaggedProxies: ['zipcode', 'university_tier'],
+  flaggedProxies: [
+    {
+      column: 'zipcode',
+      correlatesWith: 'race',
+      correlation: 0.62,
+      explanation:
+        'Zipcode acts as a stand-in for race because of historical residential segregation — ' +
+        'including it lets the model learn racial patterns even if the race column is removed.',
+    },
+    {
+      column: 'university_tier',
+      correlatesWith: 'gender',
+      correlation: 0.42,
+      explanation:
+        'University tier correlates with gender in this dataset because of uneven admission patterns ' +
+        'across fields of study, so it leaks gender signal into hiring decisions.',
+    },
+  ],
   recommendations: [
     "Remove or re-weight the 'zipcode' column — it correlates strongly with gender (r=0.62) in this dataset and acts as a hidden proxy variable.",
     "Audit the 'university_tier' field for geographic and socioeconomic bias before including it as a feature in any hiring model.",
