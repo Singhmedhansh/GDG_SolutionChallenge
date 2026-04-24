@@ -10,10 +10,12 @@ import {
   Lightbulb,
   Download,
   ArrowLeft,
+  ArrowRight,
   Flag,
   Sparkles,
   TrendingUp,
 } from 'lucide-react'
+import { Component } from 'react'
 import { useResults } from '../context/ResultsContext'
 import { mockResults } from '../data/mockResults'
 
@@ -192,6 +194,39 @@ function InfluenceTable({ factors }) {
   )
 }
 
+// ── Error Boundary ─────────────────────────────────────────
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    this.setState({ error, errorInfo });
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '40px', background: '#fef2f2', color: '#ef4444', fontFamily: 'monospace' }}>
+          <h2>Something went wrong.</h2>
+          <details style={{ whiteSpace: 'pre-wrap' }}>
+            {this.state.error && this.state.error.toString()}
+            <br />
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── Main Component ─────────────────────────────────────────
 export default function ReportPage() {
   const navigate = useNavigate()
@@ -231,6 +266,7 @@ export default function ReportPage() {
   }
 
   return (
+    <ErrorBoundary>
     <div style={pageStyles.page}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');`}</style>
       <div style={pageStyles.shell}>
@@ -627,5 +663,6 @@ export default function ReportPage() {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   )
 }
