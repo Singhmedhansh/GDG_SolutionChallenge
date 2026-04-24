@@ -7,6 +7,7 @@ import {
   Copy, Download, Loader2
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
+import { API_BASE } from '../services/api'
 
 // ── Design tokens ──────────────────────────────────────────
 const bg = '#f8fafc'
@@ -52,7 +53,7 @@ export default function JobPostingPage() {
     
     setIsScanning(true)
     try {
-      const response = await fetch('http://localhost:8000/api/scan-job-posting', {
+      const response = await fetch(`${API_BASE}/api/scan-job-posting`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_description: text })

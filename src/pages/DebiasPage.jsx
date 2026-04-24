@@ -5,6 +5,7 @@ import { Upload, Settings2, SlidersHorizontal, ArrowRight, CheckCircle2, Downloa
 import toast, { Toaster } from 'react-hot-toast'
 import ReactDropzone from 'react-dropzone'
 import { useResults } from '../context/ResultsContext'
+import { API_BASE } from '../services/api'
 
 // tokens
 const bg = '#f8fafc'
@@ -87,7 +88,7 @@ export default function DebiasPage() {
 
     setIsProcessing(true)
     try {
-      const response = await fetch('http://localhost:8000/api/debias-compare', {
+      const response = await fetch(`${API_BASE}/api/debias-compare`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
