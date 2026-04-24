@@ -14,6 +14,8 @@ import {
   Flag,
   Sparkles,
   TrendingUp,
+  Wand2,
+  GitCompareArrows,
 } from 'lucide-react'
 import { Component } from 'react'
 import { useResults } from '../context/ResultsContext'
@@ -230,8 +232,9 @@ class ErrorBoundary extends Component {
 // ── Main Component ─────────────────────────────────────────
 export default function ReportPage() {
   const navigate = useNavigate()
-  const { results: apiResults } = useResults() || {}
+  const { results: apiResults, debiasedResults } = useResults() || {}
   const data = apiResults || mockResults
+  const hasDebiased = Boolean(debiasedResults)
 
   const headerRef = useRef(null)
   const summaryRef = useRef(null)
@@ -446,6 +449,73 @@ export default function ReportPage() {
           </motion.div>
         </motion.div>
 
+        {/* ── HERO CTA: Fix This Bias / View Comparison ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 80, damping: 18, delay: 0.1 }}
+          style={{
+            marginBottom: 24,
+            borderRadius: 14,
+            padding: '22px 26px',
+            background: hasDebiased
+              ? 'linear-gradient(135deg, #10b981 0%, #2563eb 100%)'
+              : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+            color: '#ffffff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 20,
+            flexWrap: 'wrap',
+            boxShadow: hasDebiased
+              ? '0 14px 30px rgba(16, 185, 129, 0.28)'
+              : '0 14px 30px rgba(37, 99, 235, 0.28)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12,
+              background: 'rgba(255,255,255,0.18)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              {hasDebiased ? <GitCompareArrows size={24} /> : <Wand2 size={24} />}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: '0.68rem', letterSpacing: '0.18em',
+                textTransform: 'uppercase', opacity: 0.85, marginBottom: 4,
+              }}>
+                {hasDebiased ? 'Debiased model ready' : 'Next step'}
+              </div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700, lineHeight: 1.3 }}>
+                {hasDebiased
+                  ? 'See how much fairer your model got'
+                  : 'Fix this bias — apply fairness constraints to your model'}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate(hasDebiased ? '/report/comparison' : '/debias')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '12px 22px',
+              background: '#ffffff',
+              color: hasDebiased ? '#10b981' : '#2563eb',
+              border: 'none', borderRadius: 10,
+              fontFamily: "'Inter', sans-serif",
+              fontSize: '0.95rem', fontWeight: 700, cursor: 'pointer',
+              boxShadow: '0 6px 14px rgba(15, 23, 42, 0.15)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {hasDebiased ? 'View Before / After' : 'Fix This Bias'}
+            <ArrowRight size={16} />
+          </button>
+        </motion.div>
+
         {/* ── GEMINI AI SUMMARY ── */}
         {data.overallSummary && (
           <motion.div
@@ -607,21 +677,6 @@ export default function ReportPage() {
               </div>
             ))}
           </motion.div>
-          
-          {/* DEBIAS CTA */}
-          <div style={{ marginTop: '24px', textAlign: 'center' }}>
-            <button
-              onClick={() => navigate('/debias')}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '12px 24px', background: '#eff6ff', border: '1px solid #bfdbfe',
-                color: '#2563eb', borderRadius: '8px', fontFamily: "'Inter', sans-serif",
-                fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
-              }}
-            >
-              Have a trained model? Debias it here <ArrowRight size={16} />
-            </button>
-          </div>
         </div>
 
         {/* ── FOOTER ACTIONS ── */}

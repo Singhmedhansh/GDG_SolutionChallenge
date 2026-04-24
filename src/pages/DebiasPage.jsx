@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Settings2, SlidersHorizontal, ArrowRight, CheckCircle2, Download, BarChart2 } from 'lucide-react'
+import { Upload, Settings2, SlidersHorizontal, ArrowRight, CheckCircle2, Download, BarChart2, GitCompareArrows } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import ReactDropzone from 'react-dropzone'
+import { useResults } from '../context/ResultsContext'
 
 // tokens
 const bg = '#f8fafc'
 const card = '#ffffff'
 const border = '#e2e8f0'
+const blueBorder = '#bfdbfe'
 const textHead = '#0f172a'
 const textBody = '#334155'
 const textMuted = '#64748b'
@@ -16,22 +18,50 @@ const blue = '#2563eb'
 const fontInter = `'Inter', sans-serif`
 const fontMono = `'IBM Plex Mono', monospace`
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result.split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function DebiasPage() {
   const navigate = useNavigate()
+  const {
+    results,
+    datasetFile: contextDatasetFile,
+    setDebiasedResults,
+  } = useResults() || {}
+
   const [step, setStep] = useState(1)
-  
+
   // Form State
   const [modelFile, setModelFile] = useState(null)
   const [modelBase64, setModelBase64] = useState('')
   const [datasetFile, setDatasetFile] = useState(null)
   const [datasetBase64, setDatasetBase64] = useState('')
-  const [protectedAttribute, setProtectedAttribute] = useState('gender')
-  const [metric, setMetric] = useState('demographic_parity')
-  const [penaltyWeight, setPenaltyWeight] = useState(0.5)
+  const [prefilledFromAnalysis, setPrefilledFromAnalysis] = useState(false)
+  const defaultAttribute = results?.protectedAttributes?.[0]?.attribute ?? 'gender'
+  const [protectedAttribute, setProtectedAttribute] = useState(defaultAttribute)
 
   // API State
   const [isProcessing, setIsProcessing] = useState(false)
   const [result, setResult] = useState(null)
+
+  // Prefill dataset from ResultsContext (set by AnalysisPage after a scan)
+  useEffect(() => {
+    if (!contextDatasetFile || datasetFile) return
+    let cancelled = false
+    fileToBase64(contextDatasetFile).then((b64) => {
+      if (cancelled) return
+      setDatasetFile(contextDatasetFile)
+      setDatasetBase64(b64)
+      setPrefilledFromAnalysis(true)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [contextDatasetFile, datasetFile])
 
   const handleDropModel = (acceptedFiles) => {
     const file = acceptedFiles[0]
@@ -57,24 +87,39 @@ export default function DebiasPage() {
 
     setIsProcessing(true)
     try {
-      const response = await fetch('http://localhost:8000/api/debias-model', {
+      const response = await fetch('http://localhost:8000/api/debias-compare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model_file: modelBase64,
           dataset_csv: datasetBase64,
           protected_attributes: [protectedAttribute],
-          fairness_metric: metric,
-          penalty_weight: parseFloat(penaltyWeight)
         })
       })
 
       if (!response.ok) throw new Error('API error')
-      
+
       const data = await response.json()
       setResult(data)
+      const chosen = data.demographic_parity ?? data.equalized_odds ?? {}
+      setDebiasedResults?.({
+        original_fairness_score: data.original_fairness_score ?? data.raw_model?.fairness_score,
+        debiased_fairness_score: chosen.fairness_score,
+        improvement_percent: chosen.fairness_score != null && data.raw_model?.fairness_score != null
+          ? Math.max(0, chosen.fairness_score - data.raw_model.fairness_score)
+          : 0,
+        explanation: data.explanation,
+        protectedAttribute,
+        fairnessMetric: 'demographic_parity',
+        methods: {
+          raw_model: data.raw_model,
+          demographic_parity: data.demographic_parity,
+          equalized_odds: data.equalized_odds,
+        },
+        completedAt: new Date().toISOString(),
+      })
       setStep(3) // Result step
-      toast.success('Model debiasing complete!')
+      toast.success('Debiasing comparison complete!')
     } catch (err) {
       console.error(err)
       toast.error("Failed to debias. Is your Python backend running with fairlearn installed?")
@@ -83,11 +128,15 @@ export default function DebiasPage() {
     }
   }
 
-  const handleDownload = () => {
-    if (!result?.debiased_model) return
+  const downloadMethodModel = (methodKey, label) => {
+    const b64 = result?.[methodKey]?.debiased_model
+    if (!b64) {
+      toast.error('No model to download for this method.')
+      return
+    }
     const link = document.createElement("a");
-    link.href = "data:application/octet-stream;base64," + result.debiased_model;
-    link.download = `debiased_model_${metric}.pkl`;
+    link.href = "data:application/octet-stream;base64," + b64;
+    link.download = `debiased_model_${label}.pkl`;
     link.click();
   }
 
@@ -125,7 +174,19 @@ export default function DebiasPage() {
                 <h2 style={{ fontSize: '1.25rem', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Upload size={20} color={blue} /> Upload Artifacts
                 </h2>
-                
+
+                {prefilledFromAnalysis && (
+                  <div style={{
+                    background: '#eff6ff', border: `1px solid ${blueBorder}`,
+                    borderRadius: 8, padding: '10px 14px', marginBottom: 20,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    fontFamily: fontMono, fontSize: '0.72rem', color: blue, fontWeight: 600,
+                  }}>
+                    <CheckCircle2 size={14} />
+                    Dataset pre-loaded from analysis — just drop in your model.
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                   <ReactDropzone onDrop={handleDropModel} accept={{ 'application/octet-stream': ['.pkl'] }}>
                     {({getRootProps, getInputProps, isDragActive}) => (
@@ -189,43 +250,23 @@ export default function DebiasPage() {
                     />
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <label style={labelStyle}>Debiasing Methodology</label>
-                    <select 
-                      value={metric}
-                      onChange={e => setMetric(e.target.value)}
-                      style={inputStyle}
-                    >
-                      <option value="demographic_parity">Demographic Parity (Post-processing)</option>
-                      <option value="equalized_odds">Equalized Odds (Post-processing)</option>
-                      <option value="penalty">Loss Penalty (Sample Re-weighting)</option>
-                    </select>
-                    <div style={{ fontSize: '0.85rem', color: textMuted, marginTop: 4 }}>
-                       Defines whether the engine optimizes for independent predictions or equal error rates across groups.
-                    </div>
+                  <div style={{
+                    fontSize: '0.85rem', color: textMuted, lineHeight: 1.6,
+                    background: '#f8fafc', border: `1px solid ${border}`,
+                    borderRadius: 8, padding: '12px 14px',
+                  }}>
+                    We'll run <strong style={{ color: textHead }}>Raw</strong>, <strong style={{ color: textHead }}>Demographic Parity</strong>, and <strong style={{ color: textHead }}>Equalized Odds</strong> in one pass so you can compare accuracy vs fairness tradeoffs side by side.
                   </div>
-
-                  {metric === 'penalty' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <label style={labelStyle}>Penalty Weight: {penaltyWeight}</label>
-                      <input 
-                        type="range" min="0" max="1" step="0.1"
-                        value={penaltyWeight}
-                        onChange={e => setPenaltyWeight(e.target.value)}
-                        style={{ width: '100%', cursor: 'pointer' }}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32 }}>
                   <button onClick={() => setStep(1)} style={secondaryBtnStyle}>Back</button>
-                  <button 
+                  <button
                     onClick={handleDebias}
                     disabled={isProcessing || !protectedAttribute}
                     style={primaryBtnStyle(isProcessing || !protectedAttribute)}
                   >
-                    {isProcessing ? 'Processing Model...' : 'Apply Debiasing'}
+                    {isProcessing ? 'Running all three methods...' : 'Run Comparison'}
                   </button>
                 </div>
               </motion.div>
@@ -234,38 +275,50 @@ export default function DebiasPage() {
             {/* STEP 3: Results */}
             {step === 3 && result && (
               <motion.div key="step3" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-                <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                <div style={{ textAlign: 'center', marginBottom: 28 }}>
                   <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 64, height: 64, borderRadius: '50%', background: '#d1fae5', color: '#10b981', marginBottom: 16 }}>
                     <CheckCircle2 size={32} />
                   </div>
-                  <h2 style={{ fontSize: '1.5rem', marginBottom: 8, color: textHead }}>Debiasing Complete</h2>
-                  <p style={{ color: textMuted }}>{result.explanation}</p>
+                  <h2 style={{ fontSize: '1.5rem', marginBottom: 8, color: textHead }}>Method Comparison</h2>
+                  <p style={{ color: textMuted, maxWidth: 560, margin: '0 auto' }}>
+                    We ran your model through both fairness constraints at once. Compare accuracy vs DPD to pick the tradeoff that fits.
+                  </p>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 16, marginBottom: 32 }}>
-                  <div style={{ background: '#f8fafc', padding: 24, borderRadius: 12, border: `1px solid ${border}`, textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.85rem', color: textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Original Fairness</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: '#ef4444' }}>{result.original_fairness_score}<span style={{fontSize: '1rem'}}>/100</span></div>
+                <MethodComparison result={result} onDownload={downloadMethodModel} />
+
+                {results && (
+                  <div style={{ marginBottom: 24 }}>
+                    <button
+                      onClick={() => navigate('/report/comparison')}
+                      style={{
+                        width: '100%',
+                        padding: '16px 24px',
+                        background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 10,
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        boxShadow: '0 10px 24px rgba(37, 99, 235, 0.28)',
+                        fontFamily: fontInter,
+                      }}
+                    >
+                      <GitCompareArrows size={20} />
+                      See Before / After Comparison
+                      <ArrowRight size={18} />
+                    </button>
                   </div>
-                  
-                  <div style={{ background: '#eff6ff', padding: 24, borderRadius: 12, border: `1px solid ${blueBorder}`, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ fontSize: '0.85rem', color: blue, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, fontWeight: 600 }}>Debiased Fairness</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 700, color: blue }}>{result.debiased_fairness_score}<span style={{fontSize: '1rem'}}>/100</span></div>
-                    
-                    {result.improvement_percent > 0 && (
-                      <div style={{ position: 'absolute', top: 12, right: 12, background: '#10b981', color: '#fff', fontSize: '0.7rem', padding: '2px 8px', borderRadius: 999, fontWeight: 600 }}>
-                        +{result.improvement_percent}%
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
                   <button onClick={() => {setStep(1); setResult(null); setModelFile(null); setDatasetFile(null);}} style={secondaryBtnStyle}>
                     Start Over
-                  </button>
-                  <button onClick={handleDownload} style={primaryBtnStyle(false)}>
-                    <Download size={18} /> Download Protected .pkl
                   </button>
                 </div>
               </motion.div>
@@ -274,6 +327,133 @@ export default function DebiasPage() {
           </AnimatePresence>
         </div>
       </div>
+    </div>
+  )
+}
+
+function formatPct(v) {
+  if (v == null || Number.isNaN(v)) return '—'
+  return `${(v * 100).toFixed(1)}%`
+}
+
+function formatDpd(v) {
+  if (v == null || Number.isNaN(v)) return '—'
+  return Number(v).toFixed(2)
+}
+
+function MethodColumn({ title, tone, metrics, tradeoff, onDownload, downloadLabel }) {
+  const accent = {
+    slate: { bar: '#64748b', bg: '#f8fafc', badgeBg: '#e2e8f0', badgeText: '#475569', border: '#e2e8f0' },
+    blue:  { bar: blue,      bg: '#eff6ff', badgeBg: '#dbeafe', badgeText: blue,      border: blueBorder },
+    green: { bar: '#10b981', bg: '#f0fdf4', badgeBg: '#d1fae5', badgeText: '#059669', border: '#bbf7d0' },
+  }[tone]
+
+  return (
+    <div style={{
+      background: accent.bg,
+      border: `1px solid ${accent.border}`,
+      borderRadius: 12,
+      padding: 20,
+      display: 'flex', flexDirection: 'column', gap: 14,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{
+          fontFamily: fontMono, fontSize: '0.66rem', letterSpacing: '0.14em',
+          textTransform: 'uppercase', color: accent.badgeText, fontWeight: 700,
+        }}>
+          {title}
+        </div>
+        <div style={{
+          width: 10, height: 10, borderRadius: '50%', background: accent.bar,
+        }} />
+      </div>
+
+      <MetricRow label="Accuracy" value={formatPct(metrics?.accuracy)} color={accent.bar} />
+      <MetricRow label="DPD" value={formatDpd(metrics?.dpd)} color={accent.bar} />
+      <MetricRow label="Fairness Score" value={metrics?.fairness_score != null ? `${metrics.fairness_score}/100` : '—'} color={accent.bar} big />
+
+      <p style={{
+        margin: 0, fontSize: '0.82rem', color: textBody, lineHeight: 1.55, minHeight: 54,
+      }}>
+        {tradeoff ?? metrics?.tradeoff ?? ''}
+      </p>
+
+      {onDownload ? (
+        <button onClick={onDownload} style={{
+          marginTop: 'auto',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '10px 14px',
+          background: '#ffffff', color: accent.badgeText,
+          border: `1px solid ${accent.border}`, borderRadius: 8,
+          fontFamily: fontInter, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+        }}>
+          <Download size={14} /> {downloadLabel}
+        </button>
+      ) : (
+        <div style={{
+          marginTop: 'auto',
+          textAlign: 'center', fontFamily: fontMono, fontSize: '0.7rem',
+          color: textMuted, padding: '10px 14px',
+        }}>
+          baseline — no model to download
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MetricRow({ label, value, color, big }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
+      paddingBottom: 8,
+      borderBottom: `1px solid rgba(15, 23, 42, 0.06)`,
+    }}>
+      <span style={{ fontFamily: fontMono, fontSize: '0.7rem', color: textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        {label}
+      </span>
+      <span style={{
+        fontFamily: fontMono,
+        fontSize: big ? '1.1rem' : '0.95rem',
+        fontWeight: 700,
+        color,
+      }}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function MethodComparison({ result, onDownload }) {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      gap: 16,
+      marginBottom: 28,
+    }}>
+      <MethodColumn
+        title="Raw Model"
+        tone="slate"
+        metrics={result.raw_model}
+        tradeoff={result.raw_model?.tradeoff}
+      />
+      <MethodColumn
+        title="Demographic Parity"
+        tone="blue"
+        metrics={result.demographic_parity}
+        tradeoff={result.demographic_parity?.tradeoff}
+        onDownload={() => onDownload('demographic_parity', 'demographic_parity')}
+        downloadLabel="Download .pkl"
+      />
+      <MethodColumn
+        title="Equalized Odds"
+        tone="green"
+        metrics={result.equalized_odds}
+        tradeoff={result.equalized_odds?.tradeoff}
+        onDownload={() => onDownload('equalized_odds', 'equalized_odds')}
+        downloadLabel="Download .pkl"
+      />
     </div>
   )
 }
