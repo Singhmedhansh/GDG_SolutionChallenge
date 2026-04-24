@@ -5,7 +5,7 @@ import { getCoreRowModel, flexRender, useReactTable } from '@tanstack/react-tabl
 import Select from 'react-select'
 import Papa from 'papaparse'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Upload, FileText, ChevronRight, AlertCircle, CheckCircle2, X } from 'lucide-react'
+import { Upload, FileText, ChevronRight, AlertCircle, CheckCircle2, X, Lock } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import { analyzeDataset } from '../services/api'
 import { useResults } from '../context/ResultsContext'
@@ -721,6 +721,22 @@ export default function AnalysisPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        <div style={{
+          marginTop: 32, paddingTop: 20,
+          borderTop: `1px solid ${border}`,
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+        }}>
+          <Lock size={13} color={textMuted} style={{ marginTop: 3, flexShrink: 0 }} />
+          <p style={{
+            margin: 0, color: textMuted, fontFamily: fontMono,
+            fontSize: '0.72rem', lineHeight: 1.7, letterSpacing: '0.01em',
+          }}>
+            No database — your CSV is processed in a transient session and discarded.
+            We send only aggregated statistics to Google&rsquo;s Gemini API for natural-language
+            summaries; raw rows never leave our backend.
+          </p>
+        </div>
       </div>
     </div>
   )

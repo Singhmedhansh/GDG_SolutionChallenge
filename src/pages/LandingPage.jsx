@@ -65,7 +65,7 @@ export default function LandingPage() {
       num: '01',
       icon: <FileCheck size={28} color={blue} />,
       title: 'Upload Dataset',
-      desc: 'Drop any CSV hiring dataset. Columns are parsed and previewed instantly in your browser — no data leaves your machine.',
+      desc: 'Drop any CSV hiring dataset. Columns are previewed instantly in your browser, then analyzed in a transient backend session — no database, nothing persisted.',
     },
     {
       num: '02',
