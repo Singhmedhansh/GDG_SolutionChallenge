@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useRef, useState, useEffect } from 'react'
 import { motion, useInView } from 'framer-motion'
-import { Search, Shield, FileCheck, ArrowRight, CheckCircle, ChevronDown } from 'lucide-react'
+import { Search, Shield, FileCheck, ArrowRight, CheckCircle, ChevronDown, Sparkles, Users, Briefcase, Scale } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
 // ── Constants ──────────────────────────────────────────────
@@ -57,8 +57,37 @@ export default function LandingPage() {
   const [primaryHover, setPrimaryHover] = useState(false)
   const howRef = useRef(null)
   const trustRef = useRef(null)
+  const sdgRef = useRef(null)
   const howInView = useInView(howRef, { once: true, margin: '-80px' })
   const trustInView = useInView(trustRef, { once: true, margin: '-80px' })
+  const sdgInView = useInView(sdgRef, { once: true, margin: '-80px' })
+
+  const sdgs = [
+    {
+      code: 'SDG 5',
+      title: 'Gender Equality',
+      desc: 'Flags gender-based approval gaps and proxy columns so hiring models stop penalising women.',
+      icon: <Users size={20} color="#ffffff" />,
+      accent: '#FF3A21',
+      accentSoft: '#ffe4e0',
+    },
+    {
+      code: 'SDG 8',
+      title: 'Decent Work',
+      desc: 'Surfaces discriminatory patterns before automated decisions lock people out of fair employment.',
+      icon: <Briefcase size={20} color="#ffffff" />,
+      accent: '#A21942',
+      accentSoft: '#fde4ec',
+    },
+    {
+      code: 'SDG 10',
+      title: 'Reduced Inequalities',
+      desc: 'Quantifies cross-group disparities (DPD, Equalised Odds) so bias gets measured — not ignored.',
+      icon: <Scale size={20} color="#ffffff" />,
+      accent: '#DD1367',
+      accentSoft: '#fde2ee',
+    },
+  ]
 
   const steps = [
     {
@@ -97,11 +126,36 @@ export default function LandingPage() {
         alignItems: 'center', justifyContent: 'center', padding: '80px 24px'
       }}>
 
-        {/* Badge */}
+        {/* Powered-by Gemini badge */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...spring, delay: 0 }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontFamily: fontInter, fontSize: '0.78rem', fontWeight: 600,
+            color: '#ffffff',
+            background: 'linear-gradient(135deg, #4285F4 0%, #9B72F2 50%, #D96570 100%)',
+            borderRadius: 999, padding: '6px 16px 6px 10px',
+            marginBottom: 14,
+            boxShadow: '0 6px 16px rgba(66, 133, 244, 0.28)',
+          }}
+        >
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 20, height: 20, borderRadius: 999,
+            background: 'rgba(255, 255, 255, 0.22)',
+          }}>
+            <Sparkles size={12} color="#ffffff" />
+          </span>
+          Powered by Google Gemini 1.5 Flash
+        </motion.div>
+
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...spring, delay: 0.08 }}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             fontFamily: fontMono, fontSize: '0.72rem', color: blue,
@@ -300,6 +354,93 @@ export default function LandingPage() {
               <div style={{ fontSize: '0.875rem', color: textMuted, lineHeight: 1.65, marginTop: 8 }}>
                 {step.desc}
               </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── UN SDGs ─────────────────────────────────────── */}
+      <div ref={sdgRef} style={{ background: card, padding: '72px 24px', borderTop: `1px solid ${border}` }}>
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={sdgInView ? { opacity: 1, y: 0 } : {}}
+          transition={spring}
+          style={{ maxWidth: 960, margin: '0 auto', textAlign: 'center' }}
+        >
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            fontFamily: fontMono, fontSize: '0.65rem',
+            color: '#0f766e', background: '#ecfdf5', border: '1px solid #a7f3d0',
+            borderRadius: 999, padding: '4px 12px',
+            letterSpacing: '0.18em', textTransform: 'uppercase',
+          }}>
+            <Scale size={11} color="#0f766e" />
+            Impact
+          </div>
+          <div style={{
+            fontWeight: 700, fontSize: '1.8rem',
+            color: textHead, marginTop: 16, letterSpacing: '-0.01em',
+          }}>
+            Aligned with UN Sustainable Development Goals
+          </div>
+          <p style={{
+            margin: '10px auto 0', maxWidth: 560,
+            color: textMuted, fontSize: '0.95rem', lineHeight: 1.65,
+          }}>
+            Fair hiring isn&rsquo;t just good engineering — it&rsquo;s how we keep AI accountable to the people it touches.
+          </p>
+        </motion.div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+          gap: 20,
+          maxWidth: 960, margin: '40px auto 0',
+        }}>
+          {sdgs.map((sdg, i) => (
+            <motion.div
+              key={sdg.code}
+              initial={{ opacity: 0, y: 32 }}
+              animate={sdgInView ? { opacity: 1, y: 0 } : {}}
+              transition={{ ...spring, delay: i * 0.12 }}
+              whileHover={{ y: -4, boxShadow: '0 14px 32px rgba(15, 23, 42, 0.08)' }}
+              style={{
+                background: card, border: `1px solid ${border}`,
+                borderRadius: 14, padding: '22px 22px 20px',
+                display: 'flex', flexDirection: 'column', gap: 12,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: sdg.accent,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: `0 6px 14px ${sdg.accent}33`,
+                }}>
+                  {sdg.icon}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{
+                    fontFamily: fontMono, fontSize: '0.7rem',
+                    color: sdg.accent, fontWeight: 700,
+                    letterSpacing: '0.12em', textTransform: 'uppercase',
+                  }}>
+                    {sdg.code}
+                  </div>
+                  <div style={{
+                    fontSize: '1.02rem', fontWeight: 700, color: textHead,
+                    lineHeight: 1.2, marginTop: 2,
+                  }}>
+                    {sdg.title}
+                  </div>
+                </div>
+              </div>
+              <p style={{
+                margin: 0, color: textMuted, fontSize: '0.88rem', lineHeight: 1.6,
+              }}>
+                {sdg.desc}
+              </p>
             </motion.div>
           ))}
         </div>
