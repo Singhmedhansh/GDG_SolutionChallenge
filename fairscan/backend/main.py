@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.analyze import router as analyze_router
+from routes.debias import router as debias_router
 
 # Comma-separated list of allowed origins (e.g. for Cloud Run set
 # ALLOWED_ORIGINS="https://fairscan.example.com,https://fairscan-staging.example.com").
@@ -21,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze_router, prefix="/api")
+app.include_router(debias_router, prefix="/api")
 
 
 @app.get("/")
