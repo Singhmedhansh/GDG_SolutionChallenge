@@ -1,0 +1,50 @@
+# Secrets and env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python build artefacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local virtual envs (we rebuild inside the image)
+venv/
+venv_new/
+.venv/
+
+# Tests and local-only scaffolding
+tests/
+test_*.py
+*_test.py
+
+# Local data / large artefacts
+*.csv
+*.pkl
+*.joblib
+*.parquet
+data/
+datasets/
+models/
+
+# IDE / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker / Git meta (Docker doesn't need these inside the image)
+Dockerfile
+.dockerignore
+.git/
+.gitignore
