@@ -5,6 +5,7 @@ import Navbar from './components/Navbar'
 import LandingPage from './pages/LandingPage'
 import AnalysisPage from './pages/AnalysisPage'
 import ReportPage from './pages/ReportPage'
+import ReportComparisonPage from './pages/ReportComparisonPage'
 import AboutPage from './pages/AboutPage'
 import JobPostingPage from './pages/JobPostingPage'
 import DebiasPage from './pages/DebiasPage'
@@ -25,6 +26,7 @@ function AnimatedRoutes() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/analyze" element={<AnalysisPage />} />
           <Route path="/report" element={<ReportPage />} />
+          <Route path="/report/comparison" element={<ReportComparisonPage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/jobposting" element={<JobPostingPage />} />
           <Route path="/debias" element={<DebiasPage />} />

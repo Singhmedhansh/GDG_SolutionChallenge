@@ -84,7 +84,7 @@ function StepIndicator({ currentStep }) {
 
 export default function AnalysisPage() {
   const navigate = useNavigate()
-  const { setResults } = useResults()
+  const { setResults, setDebiasedResults, setDatasetFile } = useResults()
   const [currentStep, setCurrentStep] = useState(1)
   const [file, setFile] = useState(null)
   const [columns, setColumns] = useState([])
@@ -207,6 +207,8 @@ export default function AnalysisPage() {
     try {
       const data = await analyzeDataset(file, decisionColumn, protectedAttributes)
       setResults(data)
+      setDatasetFile(file)
+      setDebiasedResults(null)
       toast.success('Analysis complete!', { id: toastId })
       navigate('/report')
     } catch (err) {
@@ -217,6 +219,8 @@ export default function AnalysisPage() {
         { id: toastId, duration: 4000 },
       )
       setResults(null) // ReportPage will fall back to mockResults
+      setDatasetFile(file)
+      setDebiasedResults(null)
       setTimeout(() => navigate('/report'), 1500)
     } finally {
       setIsScanning(false)

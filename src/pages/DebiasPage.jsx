@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Settings2, SlidersHorizontal, ArrowRight, CheckCircle2, Download, BarChart2 } from 'lucide-react'
+import { Upload, Settings2, SlidersHorizontal, ArrowRight, CheckCircle2, Download, BarChart2, GitCompareArrows } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 import ReactDropzone from 'react-dropzone'
+import { useResults } from '../context/ResultsContext'
 
 // tokens
 const bg = '#f8fafc'
 const card = '#ffffff'
 const border = '#e2e8f0'
+const blueBorder = '#bfdbfe'
 const textHead = '#0f172a'
 const textBody = '#334155'
 const textMuted = '#64748b'
@@ -16,22 +18,52 @@ const blue = '#2563eb'
 const fontInter = `'Inter', sans-serif`
 const fontMono = `'IBM Plex Mono', monospace`
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result.split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 export default function DebiasPage() {
   const navigate = useNavigate()
+  const {
+    results,
+    datasetFile: contextDatasetFile,
+    setDebiasedResults,
+  } = useResults() || {}
+
   const [step, setStep] = useState(1)
-  
+
   // Form State
   const [modelFile, setModelFile] = useState(null)
   const [modelBase64, setModelBase64] = useState('')
   const [datasetFile, setDatasetFile] = useState(null)
   const [datasetBase64, setDatasetBase64] = useState('')
-  const [protectedAttribute, setProtectedAttribute] = useState('gender')
+  const [prefilledFromAnalysis, setPrefilledFromAnalysis] = useState(false)
+  const defaultAttribute = results?.protectedAttributes?.[0]?.attribute ?? 'gender'
+  const [protectedAttribute, setProtectedAttribute] = useState(defaultAttribute)
   const [metric, setMetric] = useState('demographic_parity')
   const [penaltyWeight, setPenaltyWeight] = useState(0.5)
 
   // API State
   const [isProcessing, setIsProcessing] = useState(false)
   const [result, setResult] = useState(null)
+
+  // Prefill dataset from ResultsContext (set by AnalysisPage after a scan)
+  useEffect(() => {
+    if (!contextDatasetFile || datasetFile) return
+    let cancelled = false
+    fileToBase64(contextDatasetFile).then((b64) => {
+      if (cancelled) return
+      setDatasetFile(contextDatasetFile)
+      setDatasetBase64(b64)
+      setPrefilledFromAnalysis(true)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [contextDatasetFile, datasetFile])
 
   const handleDropModel = (acceptedFiles) => {
     const file = acceptedFiles[0]
@@ -73,6 +105,12 @@ export default function DebiasPage() {
       
       const data = await response.json()
       setResult(data)
+      setDebiasedResults?.({
+        ...data,
+        protectedAttribute,
+        fairnessMetric: metric,
+        completedAt: new Date().toISOString(),
+      })
       setStep(3) // Result step
       toast.success('Model debiasing complete!')
     } catch (err) {
@@ -125,7 +163,19 @@ export default function DebiasPage() {
                 <h2 style={{ fontSize: '1.25rem', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Upload size={20} color={blue} /> Upload Artifacts
                 </h2>
-                
+
+                {prefilledFromAnalysis && (
+                  <div style={{
+                    background: '#eff6ff', border: `1px solid ${blueBorder}`,
+                    borderRadius: 8, padding: '10px 14px', marginBottom: 20,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    fontFamily: fontMono, fontSize: '0.72rem', color: blue, fontWeight: 600,
+                  }}>
+                    <CheckCircle2 size={14} />
+                    Dataset pre-loaded from analysis — just drop in your model.
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                   <ReactDropzone onDrop={handleDropModel} accept={{ 'application/octet-stream': ['.pkl'] }}>
                     {({getRootProps, getInputProps, isDragActive}) => (
@@ -259,6 +309,35 @@ export default function DebiasPage() {
                     )}
                   </div>
                 </div>
+
+                {results && (
+                  <div style={{ marginBottom: 24 }}>
+                    <button
+                      onClick={() => navigate('/report/comparison')}
+                      style={{
+                        width: '100%',
+                        padding: '16px 24px',
+                        background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 10,
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        boxShadow: '0 10px 24px rgba(37, 99, 235, 0.28)',
+                        fontFamily: fontInter,
+                      }}
+                    >
+                      <GitCompareArrows size={20} />
+                      See Before / After Comparison
+                      <ArrowRight size={18} />
+                    </button>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
                   <button onClick={() => {setStep(1); setResult(null); setModelFile(null); setDatasetFile(null);}} style={secondaryBtnStyle}>
