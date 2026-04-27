@@ -203,22 +203,37 @@ function normalizeProxies(raw) {
   if (!Array.isArray(raw)) return []
   return raw.map((item) => {
     if (typeof item === 'string') {
-      return { column: item, correlatesWith: null, correlation: null, explanation: null }
+      return { column: item, protectedAttribute: null, value: null, metric: null, strength: null, explanation: null }
     }
     return {
       column: item.column ?? item.name ?? 'unknown',
-      correlatesWith: item.correlatesWith ?? item.correlates_with ?? null,
-      correlation: item.correlation ?? item.pearson ?? null,
+      protectedAttribute: item.protectedAttribute ?? item.correlatesWith ?? item.correlates_with ?? null,
+      value: item.value ?? item.correlation ?? item.pearson ?? null,
+      metric: item.metric ?? null,
+      strength: item.strength ?? null,
       explanation: item.explanation ?? item.reason ?? null,
     }
   })
 }
 
-function correlationTone(r) {
-  const abs = Math.abs(Number(r) || 0)
-  if (abs >= 0.6) return { label: 'Strong', color: '#ef4444', bg: '#fef2f2', border: '#fecaca' }
-  if (abs >= 0.3) return { label: 'Moderate', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' }
-  return { label: 'Weak', color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' }
+const STRENGTH_TONE = {
+  strong:   { label: 'Strong',   color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+  moderate: { label: 'Moderate', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+  weak:     { label: 'Weak',     color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+}
+
+function strengthTone(strength, value) {
+  if (strength && STRENGTH_TONE[strength]) return STRENGTH_TONE[strength]
+  const abs = Math.abs(Number(value) || 0)
+  if (abs >= 0.5) return STRENGTH_TONE.strong
+  if (abs >= 0.3) return STRENGTH_TONE.moderate
+  return STRENGTH_TONE.weak
+}
+
+function metricLabel(metric) {
+  if (metric === 'cramers_v') return "Cramér's V"
+  if (metric === 'pearson') return 'Pearson r'
+  return 'r'
 }
 
 // ── Key Insight Card ───────────────────────────────────────
@@ -276,10 +291,10 @@ function KeyInsightCard({ proxies }) {
           gap: 14,
         }}>
           {proxies.map((proxy, i) => {
-            const tone = correlationTone(proxy.correlation)
-            const rValue = proxy.correlation != null
-              ? Number(proxy.correlation).toFixed(2)
-              : '—'
+            const tone = strengthTone(proxy.strength, proxy.value)
+            const hasValue = proxy.value !== null && proxy.value !== undefined
+            const rValue = hasValue ? Number(proxy.value).toFixed(2) : '—'
+            const mLabel = metricLabel(proxy.metric)
             return (
               <motion.div
                 key={proxy.column}
@@ -333,16 +348,17 @@ function KeyInsightCard({ proxies }) {
                     </span>
                     <span>↔</span>
                     <span style={{ color: '#0f172a', fontWeight: 600, textTransform: 'capitalize' }}>
-                      {proxy.correlatesWith ?? 'protected attribute'}
+                      {proxy.protectedAttribute ?? 'protected attribute'}
                     </span>
                   </div>
                   <div style={{
                     marginLeft: 'auto',
                     fontFamily: "'IBM Plex Mono', monospace",
-                    fontSize: '1.25rem', fontWeight: 800, color: tone.color,
+                    fontSize: '1.05rem', fontWeight: 800, color: tone.color,
                     letterSpacing: '-0.01em',
+                    whiteSpace: 'nowrap',
                   }}>
-                    r = {rValue}
+                    {mLabel} = {rValue}
                   </div>
                 </div>
 
@@ -361,15 +377,6 @@ function KeyInsightCard({ proxies }) {
                     }}>
                       {proxy.explanation}
                     </p>
-                  </div>
-                )}
-
-                {!proxy.explanation && proxy.correlation == null && (
-                  <div style={{
-                    fontFamily: "'IBM Plex Mono', monospace",
-                    fontSize: '0.7rem', color: '#94a3b8',
-                  }}>
-                    Correlation and explanation unavailable — backend returned only the column name.
                   </div>
                 )}
               </motion.div>
@@ -633,6 +640,37 @@ export default function ReportPage() {
           </motion.div>
         </motion.div>
 
+        {/* ── AI SUMMARY (Gemini) ── */}
+        {typeof data.geminiSummary === 'string' && data.geminiSummary.trim().length > 0 && (
+          <motion.div
+            ref={geminiRef}
+            initial={{ opacity: 0, y: 24 }}
+            animate={geminiInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
+            transition={{ type: 'spring', stiffness: 80, damping: 18 }}
+            style={{
+              ...pageStyles.card,
+              background: '#fffbeb',
+              border: '1px solid #fde68a',
+              padding: '20px 24px',
+              marginBottom: 24,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Sparkles size={18} color="#f59e0b" />
+              <span style={{
+                fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.72rem',
+                color: '#92400e', fontWeight: 600, letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}>
+                AI Summary
+              </span>
+            </div>
+            <p style={{ margin: 0, color: '#78350f', fontSize: '0.9rem', lineHeight: 1.7 }}>
+              {data.geminiSummary}
+            </p>
+          </motion.div>
+        )}
+
         {/* ── KEY INSIGHT: Proxy Columns (our differentiator) ── */}
         {normalizedProxies.length > 0 && (
           <KeyInsightCard proxies={normalizedProxies} />
@@ -704,33 +742,6 @@ export default function ReportPage() {
             <ArrowRight size={16} />
           </button>
         </motion.div>
-
-        {/* ── GEMINI AI SUMMARY ── */}
-        {data.overallSummary && (
-          <motion.div
-            ref={geminiRef}
-            initial={{ opacity: 0, y: 24 }}
-            animate={geminiInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
-            transition={{ type: 'spring', stiffness: 80, damping: 18 }}
-            style={{
-              background: '#fffbeb', border: '1px solid #fde68a',
-              borderRadius: 12, padding: '20px 24px', marginBottom: 24,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Sparkles size={18} color="#f59e0b" />
-              <span style={{
-                fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.72rem',
-                color: '#92400e', fontWeight: 600, letterSpacing: '0.08em',
-              }}>
-                Gemini AI Summary
-              </span>
-            </div>
-            <p style={{ margin: 0, color: '#78350f', fontSize: '0.9rem', lineHeight: 1.7 }}>
-              {data.overallSummary}
-            </p>
-          </motion.div>
-        )}
 
         {/* ── BIAS BREAKDOWN ── */}
         <div ref={breakdownRef} style={{ marginBottom: '24px' }}>
