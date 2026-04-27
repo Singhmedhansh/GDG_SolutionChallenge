@@ -1,5 +1,10 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pandas
+numpy
 scikit-learn
+fairlearn
 python-multipart
+python-dotenv
+google-generativeai
+pydantic

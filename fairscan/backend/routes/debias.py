@@ -1,9 +1,7 @@
 """
 FastAPI router for the three-way debias comparison endpoint.
-
-Register in main.py with:
-    from routes.debias import router as debias_router
-    app.include_router(debias_router)
+Registered in main.py with prefix="/api", so the route decorator here
+is "/debias-compare" (final URL: /api/debias-compare).
 """
 from __future__ import annotations
 
@@ -12,7 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.debiasing import run_all_methods
+from services.debias_compare import run_all_methods
 
 router = APIRouter()
 
@@ -27,7 +25,7 @@ class DebiasCompareRequest(BaseModel):
     penalty_weight: Optional[float] = None
 
 
-@router.post("/api/debias-compare")
+@router.post("/debias-compare")
 def debias_compare(body: DebiasCompareRequest):
     if not body.protected_attributes:
         raise HTTPException(status_code=400, detail="protected_attributes must not be empty.")

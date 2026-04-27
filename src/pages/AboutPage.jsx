@@ -9,6 +9,9 @@ import {
   BookOpen,
   HeartHandshake,
   Scale,
+  Lock,
+  Database,
+  Cloud,
 } from 'lucide-react'
 
 const bg = '#f8fafc'
@@ -99,12 +102,14 @@ export default function AboutPage() {
   const stackRef = useRef(null)
   const teamRef = useRef(null)
   const ctaRef = useRef(null)
+  const trustRef = useRef(null)
 
   const heroInView = useInView(heroRef, { once: true, margin: '-60px' })
   const sdgInView = useInView(sdgRef, { once: true, margin: '-60px' })
   const stackInView = useInView(stackRef, { once: true, margin: '-60px' })
   const teamInView = useInView(teamRef, { once: true, margin: '-60px' })
   const ctaInView = useInView(ctaRef, { once: true, margin: '-60px' })
+  const trustInView = useInView(trustRef, { once: true, margin: '-60px' })
 
   return (
     <div style={{ minHeight: '100vh', background: bg, fontFamily: fontInter, color: textHead }}>
@@ -342,6 +347,109 @@ export default function AboutPage() {
             ))}
           </div>
         </div>
+
+        {/* ── TRUST & DATA HANDLING ── */}
+        <motion.div
+          ref={trustRef}
+          initial={{ opacity: 0, y: 30 }}
+          animate={trustInView ? { opacity: 1, y: 0 } : {}}
+          transition={spring}
+          style={{
+            background: card,
+            border: `1px solid ${border}`,
+            borderRadius: 16,
+            padding: '32px 28px',
+            marginBottom: 32,
+          }}
+        >
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+          }}>
+            <Lock size={16} color={blue} />
+            <div style={{
+              fontFamily: fontMono, fontSize: '0.65rem', color: blue,
+              letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600,
+            }}>
+              Trust &amp; data handling
+            </div>
+          </div>
+          <h3 style={{
+            margin: '0 0 10px', fontSize: '1.5rem', fontWeight: 700, color: textHead,
+          }}>
+            What actually happens to your data
+          </h3>
+          <p style={{
+            margin: '0 0 20px', color: textMuted, fontSize: '0.95rem', lineHeight: 1.7, maxWidth: 680,
+          }}>
+            We&rsquo;re going to be straight with you: FairScan is not a local-only tool, and
+            we don&rsquo;t want to pretend otherwise.
+          </p>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: 14,
+          }}>
+            <div style={{
+              background: '#f8fafc', border: `1px solid ${border}`,
+              borderRadius: 12, padding: '16px 18px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Database size={16} color="#059669" />
+                <div style={{
+                  fontFamily: fontMono, fontSize: '0.72rem', fontWeight: 700,
+                  color: textHead, letterSpacing: '0.06em',
+                }}>
+                  No database
+                </div>
+              </div>
+              <p style={{ margin: 0, color: textMuted, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                Your CSV is processed in a transient backend session and discarded when
+                the request finishes. Nothing is persisted, logged, or stored long-term.
+              </p>
+            </div>
+
+            <div style={{
+              background: '#f8fafc', border: `1px solid ${border}`,
+              borderRadius: 12, padding: '16px 18px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Cloud size={16} color={blue} />
+                <div style={{
+                  fontFamily: fontMono, fontSize: '0.72rem', fontWeight: 700,
+                  color: textHead, letterSpacing: '0.06em',
+                }}>
+                  Gemini gets aggregates, not rows
+                </div>
+              </div>
+              <p style={{ margin: 0, color: textMuted, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                We send only aggregated statistics (approval rates, group sizes, DPD values)
+                to Google&rsquo;s Gemini API for natural-language summaries. Raw rows never
+                leave our backend.
+              </p>
+            </div>
+
+            <div style={{
+              background: '#f8fafc', border: `1px solid ${border}`,
+              borderRadius: 12, padding: '16px 18px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ShieldCheck size={16} color="#f59e0b" />
+                <div style={{
+                  fontFamily: fontMono, fontSize: '0.72rem', fontWeight: 700,
+                  color: textHead, letterSpacing: '0.06em',
+                }}>
+                  Your responsibility
+                </div>
+              </div>
+              <p style={{ margin: 0, color: textMuted, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                Because data transits our backend and Gemini&rsquo;s API, don&rsquo;t upload
+                PII or anything your organisation&rsquo;s policy prohibits sending to a
+                third-party cloud service.
+              </p>
+            </div>
+          </div>
+        </motion.div>
 
         {/* ── CTA ── */}
         <motion.div
