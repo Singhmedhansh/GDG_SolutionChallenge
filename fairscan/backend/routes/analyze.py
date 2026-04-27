@@ -1,10 +1,18 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict, Any, Optional
+import asyncio
 import pandas as pd
 import io
 import base64
+import logging
+from math import sqrt
 from datetime import datetime
+from scipy.stats import chi2_contingency
+
+GEMINI_TIMEOUT_SECONDS = 15
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,8 +46,9 @@ class AnalyzeResponse(BaseModel):
     decisionColumn: str
     datasetInfo: DatasetInfo
     protectedAttributes: List[AttributeResult]
-    flaggedProxies: List[str]
+    flaggedProxies: List[Dict[str, Any]]
     recommendations: List[str]
+    geminiSummary: Optional[str] = None
 
 class DebiasRequest(BaseModel):
     model_file: str
@@ -80,25 +89,70 @@ def decode_csv(csvData: str) -> pd.DataFrame:
         raise HTTPException(status_code=400, detail="Invalid CSV data")
 
 
+# ── Helper: Cramér's V (Bergsma 2013 bias-corrected) ─────
+def _cramers_v(a: pd.Series, b: pd.Series) -> float:
+    table = pd.crosstab(a, b)
+    if table.size == 0:
+        return float("nan")
+    n = int(table.to_numpy().sum())
+    if n == 0:
+        return float("nan")
+    r, k = table.shape
+    if min(r, k) < 2:
+        return 0.0
+    chi2 = chi2_contingency(table, correction=False)[0]
+    phi2 = chi2 / n
+    phi2_corr = max(0.0, phi2 - ((k - 1) * (r - 1)) / (n - 1))
+    k_corr = k - ((k - 1) ** 2) / (n - 1)
+    r_corr = r - ((r - 1) ** 2) / (n - 1)
+    denom = min(k_corr - 1, r_corr - 1)
+    if denom <= 0:
+        return 0.0
+    return sqrt(phi2_corr / denom)
+
+
 # ── Helper: Detect Proxy Columns ─────────────────────────
-def detect_proxies(df: pd.DataFrame, protected: List[str], decision: str) -> List[str]:
-    proxies = []
+PROXY_THRESHOLD = 0.3
+PROXY_STRONG = 0.5
+
+
+def detect_proxies(
+    df: pd.DataFrame, protected: List[str], decision: str
+) -> List[Dict[str, Any]]:
+    flagged: List[Dict[str, Any]] = []
     non_protected = [c for c in df.columns if c not in protected and c != decision]
     for col in non_protected:
-        try:
-            for prot in protected:
-                if df[prot].dtype == object or df[col].dtype == object:
-                    encoded_prot = pd.factorize(df[prot])[0]
-                    encoded_col = pd.factorize(df[col])[0]
-                    corr = abs(pd.Series(encoded_prot).corr(pd.Series(encoded_col)))
+        best: Dict[str, Any] = None
+        for prot in protected:
+            try:
+                if (
+                    pd.api.types.is_numeric_dtype(df[prot])
+                    and pd.api.types.is_numeric_dtype(df[col])
+                ):
+                    raw = df[prot].corr(df[col])
+                    value = abs(raw) if pd.notna(raw) else float("nan")
+                    metric = "pearson"
                 else:
-                    corr = abs(df[prot].corr(df[col]))
-                if corr > 0.3:
-                    proxies.append(col)
-                    break
-        except Exception:
-            continue
-    return list(set(proxies))
+                    value = _cramers_v(df[prot], df[col])
+                    metric = "cramers_v"
+                if pd.notna(value) and value > PROXY_THRESHOLD:
+                    candidate = {
+                        "column": col,
+                        "protectedAttribute": prot,
+                        "metric": metric,
+                        "value": round(float(value), 4),
+                        "strength": "strong" if value >= PROXY_STRONG else "moderate",
+                    }
+                    if best is None or candidate["value"] > best["value"]:
+                        best = candidate
+            except Exception as e:
+                logger.warning(
+                    "proxy check failed for %s vs %s: %s", prot, col, e
+                )
+                continue
+        if best is not None:
+            flagged.append(best)
+    return flagged
 
 
 # ── Helper: Analyze One Attribute ────────────────────────
@@ -179,7 +233,7 @@ def calculate_fairness_score(results: List[AttributeResult]) -> float:
 # ── Helper: Generate Recommendations ─────────────────────
 def generate_recommendations(
     results: List[AttributeResult],
-    proxies: List[str]
+    proxies: List[Dict[str, Any]]
 ) -> List[str]:
     recs = []
     for r in results:
@@ -189,8 +243,9 @@ def generate_recommendations(
                 f"a {r.metric.split(': ')[1]} disparity was detected across groups."
             )
     for proxy in proxies:
+        column = proxy.get("column", "unknown") if isinstance(proxy, dict) else str(proxy)
         recs.append(
-            f"Remove or re-weight '{proxy}' — "
+            f"Remove or re-weight '{column}' — "
             f"it correlates with protected attributes and may encode indirect bias."
         )
     if any(r.severity == "high" for r in results):
@@ -232,22 +287,74 @@ async def analyze(request: AnalyzeRequest):
     # 5. Calculate overall fairness score
     score = calculate_fairness_score(attribute_results)
 
-    # 6. Generate recommendations
-    recs = generate_recommendations(attribute_results, proxies)
+    # 6. Build the structured report payload Gemini will see
+    dataset_info = DatasetInfo(
+        fileName=request.fileName,
+        totalRows=len(df),
+        totalColumns=len(df.columns),
+        scannedAt=datetime.utcnow().isoformat() + "Z",
+    )
+    report_data = {
+        "fairnessScore": score,
+        "status": "biased" if score < 75 else "fair",
+        "decisionColumn": request.decisionColumn,
+        "datasetInfo": dataset_info.model_dump(),
+        "protectedAttributes": [r.model_dump() for r in attribute_results],
+        "flaggedProxies": proxies,
+    }
+
+    # 7. Call Gemini for summary + recommendations in parallel, each bounded
+    gemini_summary: Optional[str] = None
+    gemini_recs: Optional[List[str]] = None
+    try:
+        from services.gemini import (
+            generate_bias_summary,
+            generate_bias_recommendations,
+        )
+
+        async def _summary():
+            return await asyncio.wait_for(
+                generate_bias_summary(report_data),
+                timeout=GEMINI_TIMEOUT_SECONDS,
+            )
+
+        async def _recs():
+            return await asyncio.wait_for(
+                generate_bias_recommendations(report_data),
+                timeout=GEMINI_TIMEOUT_SECONDS,
+            )
+
+        summary_result, recs_result = await asyncio.gather(
+            _summary(), _recs(), return_exceptions=True
+        )
+
+        if isinstance(summary_result, Exception):
+            logger.warning("gemini summary failed: %s", summary_result)
+        else:
+            gemini_summary = summary_result
+
+        if isinstance(recs_result, Exception):
+            logger.warning("gemini recommendations failed: %s", recs_result)
+        else:
+            gemini_recs = recs_result
+    except Exception as e:
+        logger.warning("gemini integration unavailable: %s", e)
+
+    # 8. Use Gemini recs when available, otherwise template fallback
+    if gemini_recs:
+        recommendations = gemini_recs
+    else:
+        recommendations = generate_recommendations(attribute_results, proxies)
 
     return AnalyzeResponse(
         fairnessScore=score,
         status="biased" if score < 75 else "fair",
         decisionColumn=request.decisionColumn,
-        datasetInfo=DatasetInfo(
-            fileName=request.fileName,
-            totalRows=len(df),
-            totalColumns=len(df.columns),
-            scannedAt=datetime.utcnow().isoformat() + "Z"
-        ),
+        datasetInfo=dataset_info,
         protectedAttributes=attribute_results,
         flaggedProxies=proxies,
-        recommendations=recs
+        recommendations=recommendations,
+        geminiSummary=gemini_summary,
     )
 
 

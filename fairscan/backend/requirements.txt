@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 pandas
 numpy
+scipy>=1.10
 scikit-learn
 fairlearn
 python-multipart
