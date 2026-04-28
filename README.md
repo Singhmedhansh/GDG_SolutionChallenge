@@ -491,9 +491,9 @@ A demo dataset is included at `public/demo_hiring.csv`.
 
 | Name | GitHub | Role |
 |---|---|---|
-| **Medhansh Singh** | [@Singhmedhansh](https://github.com/Singhmedhansh) | Frontend Engineer |
+| **Medhansh Singh** | [@Singhmedhansh](https://github.com/Singhmedhansh) | Frontend Engineer and GCP Deployment |
 | **Tanmay Angarkar** | [@angarkartanmay-ops](https://github.com/angarkartanmay-ops) | Backend Engineer |
-
+| **Jai Sharma** | [@Jaicoder-1](https://github.com/Jaicoder-1) | AI-ML Pipeline Build |
 ---
 
 ## 📄 License
