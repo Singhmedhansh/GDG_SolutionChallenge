@@ -1,28 +1,23 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import asyncio
+import json
 import pandas as pd
 import io
-import base64
 import logging
 from math import sqrt
 from datetime import datetime
 from scipy.stats import chi2_contingency
 
 GEMINI_TIMEOUT_SECONDS = 15
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB safety cap
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ── Request/Response Models ──────────────────────────────
-class AnalyzeRequest(BaseModel):
-    fileName: str
-    csvData: str  # base64 encoded CSV string
-    decisionColumn: str
-    protectedAttributes: List[str]
-
+# ── Response Models ──────────────────────────────────────
 class GroupStat(BaseModel):
     group: str
     approvalRate: float
@@ -50,19 +45,14 @@ class AnalyzeResponse(BaseModel):
     recommendations: List[str]
     geminiSummary: Optional[str] = None
 
-class DebiasRequest(BaseModel):
-    model_file: str
-    dataset_csv: str
-    protected_attributes: List[str]
-    fairness_metric: str
-    penalty_weight: float = 0.5
-
 class DebiasResponse(BaseModel):
     original_fairness_score: float
     debiased_fairness_score: float
     improvement_percent: float
     debiased_model: str
     explanation: str
+    inference_instructions: str
+
 class JobPostingRequest(BaseModel):
     job_description: str
 
@@ -79,14 +69,33 @@ class JobPostingResponse(BaseModel):
     rewritten_job: str
 
 
-# ── Helper: Decode CSV ───────────────────────────────────
-def decode_csv(csvData: str) -> pd.DataFrame:
+# ── Helper: Read CSV from UploadFile ─────────────────────
+async def read_csv_upload(file: UploadFile) -> pd.DataFrame:
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File exceeds 50 MB limit.")
     try:
-        decoded = base64.b64decode(csvData).decode("utf-8")
-        df = pd.read_csv(io.StringIO(decoded))
-        return df
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid CSV data")
+        return pd.read_csv(io.BytesIO(raw))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV: {e}")
+
+
+def _parse_string_list(value: str, field_name: str) -> List[str]:
+    """Accept either JSON array or comma-separated strings from a form field."""
+    if not value:
+        return []
+    value = value.strip()
+    if value.startswith("["):
+        try:
+            parsed = json.loads(value)
+            if not isinstance(parsed, list):
+                raise ValueError
+            return [str(v) for v in parsed]
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON for {field_name}.")
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 # ── Helper: Cramér's V (Bergsma 2013 bias-corrected) ─────
@@ -162,7 +171,6 @@ def analyze_attribute(df: pd.DataFrame, attribute: str, decision: str) -> Attrib
         group_stats = []
         approval_rates = []
 
-        # Normalize decision column to binary
         decision_col = df[decision].astype(str).str.lower()
         positive_values = {"yes", "1", "true", "hired", "approved", "accepted"}
         binary_decision = decision_col.isin(positive_values).astype(int)
@@ -174,10 +182,7 @@ def analyze_attribute(df: pd.DataFrame, attribute: str, decision: str) -> Attrib
                 continue
             rate = round(group_df.mean() * 100, 1)
             approval_rates.append(rate)
-            group_stats.append(GroupStat(
-                group=str(group),
-                approvalRate=rate
-            ))
+            group_stats.append(GroupStat(group=str(group), approvalRate=rate))
 
         if len(approval_rates) < 2:
             return AttributeResult(
@@ -188,7 +193,6 @@ def analyze_attribute(df: pd.DataFrame, attribute: str, decision: str) -> Attrib
                 severity="none"
             )
 
-        # Demographic Parity Difference
         dpd = round((max(approval_rates) - min(approval_rates)) / 100, 2)
         bias_detected = dpd > 0.1
 
@@ -260,36 +264,34 @@ def generate_recommendations(
     return recs
 
 
-# ── Main Endpoint ─────────────────────────────────────────
+# ── /analyze: multipart upload ────────────────────────────
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(request: AnalyzeRequest):
-    # 1. Decode CSV
-    df = decode_csv(request.csvData)
+async def analyze(
+    file: UploadFile = File(..., description="CSV dataset"),
+    decisionColumn: str = Form(...),
+    protectedAttributes: str = Form(..., description="JSON array or comma-separated column names"),
+    fileName: Optional[str] = Form(None),
+):
+    df = await read_csv_upload(file)
+    protected_list = _parse_string_list(protectedAttributes, "protectedAttributes")
+    display_name = fileName or file.filename or "uploaded.csv"
 
-    # 2. Validate columns exist
-    missing = [c for c in [request.decisionColumn] + request.protectedAttributes
-               if c not in df.columns]
+    missing = [c for c in [decisionColumn] + protected_list if c not in df.columns]
     if missing:
         raise HTTPException(
             status_code=400,
             detail=f"Columns not found in dataset: {missing}"
         )
 
-    # 3. Analyze each protected attribute
     attribute_results = [
-        analyze_attribute(df, attr, request.decisionColumn)
-        for attr in request.protectedAttributes
+        analyze_attribute(df, attr, decisionColumn) for attr in protected_list
     ]
 
-    # 4. Detect proxy columns
-    proxies = detect_proxies(df, request.protectedAttributes, request.decisionColumn)
-
-    # 5. Calculate overall fairness score
+    proxies = detect_proxies(df, protected_list, decisionColumn)
     score = calculate_fairness_score(attribute_results)
 
-    # 6. Build the structured report payload Gemini will see
     dataset_info = DatasetInfo(
-        fileName=request.fileName,
+        fileName=display_name,
         totalRows=len(df),
         totalColumns=len(df.columns),
         scannedAt=datetime.utcnow().isoformat() + "Z",
@@ -297,13 +299,12 @@ async def analyze(request: AnalyzeRequest):
     report_data = {
         "fairnessScore": score,
         "status": "biased" if score < 75 else "fair",
-        "decisionColumn": request.decisionColumn,
+        "decisionColumn": decisionColumn,
         "datasetInfo": dataset_info.model_dump(),
         "protectedAttributes": [r.model_dump() for r in attribute_results],
         "flaggedProxies": proxies,
     }
 
-    # 7. Call Gemini for summary + recommendations in parallel, each bounded
     gemini_summary: Optional[str] = None
     gemini_recs: Optional[List[str]] = None
     try:
@@ -340,16 +341,12 @@ async def analyze(request: AnalyzeRequest):
     except Exception as e:
         logger.warning("gemini integration unavailable: %s", e)
 
-    # 8. Use Gemini recs when available, otherwise template fallback
-    if gemini_recs:
-        recommendations = gemini_recs
-    else:
-        recommendations = generate_recommendations(attribute_results, proxies)
+    recommendations = gemini_recs if gemini_recs else generate_recommendations(attribute_results, proxies)
 
     return AnalyzeResponse(
         fairnessScore=score,
         status="biased" if score < 75 else "fair",
-        decisionColumn=request.decisionColumn,
+        decisionColumn=decisionColumn,
         datasetInfo=dataset_info,
         protectedAttributes=attribute_results,
         flaggedProxies=proxies,
@@ -358,8 +355,16 @@ async def analyze(request: AnalyzeRequest):
     )
 
 
+# ── /debias-model: multipart upload ───────────────────────
 @router.post("/debias-model", response_model=DebiasResponse)
-async def debias_model_endpoint(request: DebiasRequest):
+async def debias_model_endpoint(
+    model_file: UploadFile = File(..., description="Pickled scikit-learn model (.pkl)"),
+    dataset_file: UploadFile = File(..., description="CSV dataset"),
+    target_column: str = Form(..., description="Name of the label/target column"),
+    protected_attributes: str = Form(..., description="JSON array or comma-separated column names"),
+    fairness_metric: str = Form(...),
+    penalty_weight: float = Form(0.5),
+):
     try:
         from services.debiasing import (
             load_model, apply_demographic_parity, apply_equalized_odds,
@@ -368,75 +373,93 @@ async def debias_model_endpoint(request: DebiasRequest):
     except ImportError:
         raise HTTPException(status_code=500, detail="Debiasing service is not available.")
 
+    model_bytes = await model_file.read()
+    if not model_bytes:
+        raise HTTPException(status_code=400, detail="Model file is empty.")
+    if len(model_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Model file exceeds 50 MB limit.")
     try:
-        model_bytes = base64.b64decode(request.model_file)
         model = load_model(model_bytes)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid model file format: {str(e)}")
 
-    try:
-        df = decode_csv(request.dataset_csv)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid dataset format.")
-
-    # We assume the label column is the last column or named "label"/"decision" (we should just use the last column for now if not provided, wait, request model didn't ask for decision column)
-    # Actually, we can get target from training data, typically the last column
-    # Let's check attributes
-    missing = [c for c in request.protected_attributes if c not in df.columns]
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Protected attributes not found in dataset: {missing}")
-    
-    # We will assume label is the last column
-    target_col = df.columns[-1]
-    y = df[target_col]
-    X = df.drop(columns=[target_col])
-    
-    protected_attr = df[request.protected_attributes[0]] if request.protected_attributes else None
-    if protected_attr is None:
+    df = await read_csv_upload(dataset_file)
+    protected_list = _parse_string_list(protected_attributes, "protected_attributes")
+    if not protected_list:
         raise HTTPException(status_code=400, detail="At least one protected attribute is required.")
 
-    # Apply constraint
+    if target_column not in df.columns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Target column '{target_column}' not found in dataset."
+        )
+
+    missing = [c for c in protected_list if c not in df.columns]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Protected attributes not found in dataset: {missing}")
+
+    y = df[target_column]
+    X = df.drop(columns=[target_column])
+    protected_attr = df[protected_list[0]]
+
     try:
-        if request.fairness_metric == "demographic_parity":
+        if fairness_metric == "demographic_parity":
             debiased_model = apply_demographic_parity(model, X, y, protected_attr)
-        elif request.fairness_metric == "equalized_odds":
+            wraps_optimizer = True
+        elif fairness_metric == "equalized_odds":
             debiased_model = apply_equalized_odds(model, X, y, protected_attr)
-        else: # including calibration and penalty 
-            debiased_model = apply_fairness_penalty(model, X, y, protected_attr, request.penalty_weight)
+            wraps_optimizer = True
+        else:
+            debiased_model = apply_fairness_penalty(model, X, y, protected_attr, penalty_weight)
+            wraps_optimizer = False
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to apply debiasing: {str(e)}")
 
     metrics = evaluate_fairness_before_after(model, debiased_model, X, y, protected_attr)
     debiased_b64 = return_debiased_model(debiased_model)
 
+    if wraps_optimizer:
+        inference_instructions = (
+            "This downloaded model is a Fairlearn ThresholdOptimizer. "
+            "When calling .predict() in production, you must pass the sensitive attribute "
+            "via the `sensitive_features` argument — for example: "
+            f"`model.predict(X, sensitive_features=df['{protected_list[0]}'])`. "
+            "Calling .predict() without sensitive_features will raise an error."
+        )
+    else:
+        inference_instructions = (
+            "This downloaded model is a standard scikit-learn estimator retrained with "
+            "fairness-aware sample weights. Use .predict(X) as you normally would — no "
+            "sensitive_features argument is required at inference time."
+        )
+
     return DebiasResponse(
         original_fairness_score=metrics["original_fairness_score"],
         debiased_fairness_score=metrics["debiased_fairness_score"],
         improvement_percent=metrics["improvement_percent"],
         debiased_model=debiased_b64,
-        explanation=f"Successfully applied {request.fairness_metric} constraint. Improved score by {metrics['improvement_percent']}%."
+        explanation=f"Successfully applied {fairness_metric} constraint. Improved score by {metrics['improvement_percent']}%.",
+        inference_instructions=inference_instructions,
     )
+
 
 @router.post("/scan-job-posting", response_model=JobPostingResponse)
 async def scan_job_posting_endpoint(request: JobPostingRequest):
     if not request.job_description or not request.job_description.strip():
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
-        
+
     try:
         from services.gemini import scan_job_posting_for_bias, rewrite_job_for_fairness
     except ImportError:
         raise HTTPException(status_code=500, detail="Gemini service is not available.")
-        
-    # Phase 1: Scan
+
     scan_result = scan_job_posting_for_bias(request.job_description)
-    
-    # Phase 2: Rewrite
+
     rewritten_job = request.job_description
     bias_flags = scan_result.get("bias_flags", [])
     if bias_flags:
         rewritten_job = rewrite_job_for_fairness(request.job_description, bias_flags)
-        
-    # Build list of parsed bias flags
+
     parsed_flags = []
     for flag in bias_flags:
         parsed_flags.append(
@@ -447,10 +470,10 @@ async def scan_job_posting_endpoint(request: JobPostingRequest):
                 explanation=flag.get("explanation", "")
             )
         )
-        
+
     return JobPostingResponse(
         bias_flags=parsed_flags,
         overall_risk=scan_result.get("overall_risk", "low"),
         suggestions=scan_result.get("suggestions", []),
         rewritten_job=rewritten_job
-    )
+    )
