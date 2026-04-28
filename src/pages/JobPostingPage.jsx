@@ -27,30 +27,25 @@ export default function JobPostingPage() {
   const [jobDescription, setJobDescription] = useState('')
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState(null)
-  
-  // Debounce ref
-  const timeoutRef = useRef(null)
+  const [scanError, setScanError] = useState(null)
 
   const handleTextChange = (e) => {
-    const text = e.target.value
-    setJobDescription(text)
-    
-    // Clear previous timeout
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    
-    // Set a new timeout to auto-scan if text is long enough
-    if (text.trim().length > 50) {
-      timeoutRef.current = setTimeout(() => {
-        runScan(text)
-      }, 1000)
-    } else {
+    setJobDescription(e.target.value)
+    // Clear previous results when user edits the text
+    if (scanResult || scanError) {
       setScanResult(null)
+      setScanError(null)
     }
   }
 
-  const runScan = async (text) => {
-    if (!text || text.trim() === '') return
-    
+  const runScan = async () => {
+    const text = jobDescription
+    if (!text || text.trim() === '') {
+      toast.error('Please paste a job description first.')
+      return
+    }
+    setScanError(null)
+    setScanResult(null)
     setIsScanning(true)
     try {
       const response = await fetch(`${API_BASE}/api/scan-job-posting`, {
@@ -58,16 +53,15 @@ export default function JobPostingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_description: text })
       })
-      
       if (!response.ok) {
-        throw new Error('Failed to scan')
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.detail || `Server error ${response.status}`)
       }
-      
       const data = await response.json()
       setScanResult(data)
     } catch (err) {
       console.error(err)
-      toast.error("Failed to scan job description.")
+      setScanError(err.message || 'Failed to scan. Ensure the backend is running.')
     } finally {
       setIsScanning(false)
     }
@@ -106,6 +100,8 @@ export default function JobPostingPage() {
         .jd-textarea:focus { outline: none; border-color: ${blueBorder}; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
         .glass-scroll::-webkit-scrollbar { width: 6px; }
         .glass-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
       
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -166,7 +162,7 @@ export default function JobPostingPage() {
             
             <div style={{ padding: 16, borderTop: `1px solid ${border}`, background: '#f8fafc' }}>
                <button
-                  onClick={() => runScan(jobDescription)}
+                  onClick={runScan}
                   disabled={isScanning || jobDescription.trim() === ''}
                   style={{
                     width: '100%', padding: '12px', background: blue, color: '#fff',
@@ -184,7 +180,25 @@ export default function JobPostingPage() {
           {/* RIGHT: Results Area */}
           <div style={{ height: 'calc(100vh - 220px)', display: 'flex', flexDirection: 'column', gap: 24 }}>
             <AnimatePresence mode="wait">
-              {!scanResult ? (
+              {scanError ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  style={{
+                    flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    justifyContent: 'center', border: `1px solid #fecaca`, borderRadius: 12,
+                    background: '#fef2f2', color: '#991b1b', padding: 32, textAlign: 'center'
+                  }}
+                >
+                  <AlertTriangle size={48} color="#ef4444" style={{ marginBottom: 16 }} />
+                  <div style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: 8 }}>
+                    Scan Failed
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.9rem', maxWidth: 400, lineHeight: 1.6 }}>
+                    {scanError}
+                  </p>
+                </motion.div>
+              ) : !scanResult ? (
                 <motion.div
                   key="empty"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

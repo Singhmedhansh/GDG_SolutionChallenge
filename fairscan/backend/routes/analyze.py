@@ -453,27 +453,50 @@ async def scan_job_posting_endpoint(request: JobPostingRequest):
     except ImportError:
         raise HTTPException(status_code=500, detail="Gemini service is not available.")
 
-    scan_result = scan_job_posting_for_bias(request.job_description)
+    # Run sync Gemini SDK calls off the event loop so the server doesn't block
+    # for 5–10 s while a single user is being scanned.
+    scan_result = await asyncio.to_thread(scan_job_posting_for_bias, request.job_description)
+    if not isinstance(scan_result, dict):
+        scan_result = {}
 
-    rewritten_job = request.job_description
-    bias_flags = scan_result.get("bias_flags", [])
-    if bias_flags:
-        rewritten_job = rewrite_job_for_fairness(request.job_description, bias_flags)
+    raw_flags = scan_result.get("bias_flags") or []
+    if not isinstance(raw_flags, list):
+        raw_flags = []
 
-    parsed_flags = []
-    for flag in bias_flags:
+    # Defensive: Gemini occasionally returns malformed JSON (strings instead of
+    # objects, missing keys). Skip anything that isn't a dict.
+    parsed_flags: List[BiasFlag] = []
+    for flag in raw_flags:
+        if not isinstance(flag, dict):
+            continue
         parsed_flags.append(
             BiasFlag(
-                type=flag.get("type", "Unknown"),
-                severity=flag.get("severity", "low"),
-                example=flag.get("example", ""),
-                explanation=flag.get("explanation", "")
+                type=str(flag.get("type", "Unknown")),
+                severity=str(flag.get("severity", "low")),
+                example=str(flag.get("example", "")),
+                explanation=str(flag.get("explanation", "")),
             )
         )
 
+    rewritten_job = request.job_description
+    if raw_flags:
+        try:
+            rewritten = await asyncio.to_thread(
+                rewrite_job_for_fairness, request.job_description, raw_flags
+            )
+            if isinstance(rewritten, str) and rewritten.strip():
+                rewritten_job = rewritten
+        except Exception as e:
+            logger.warning("rewrite_job_for_fairness failed: %s", e)
+
+    suggestions = scan_result.get("suggestions") or []
+    if not isinstance(suggestions, list):
+        suggestions = []
+    suggestions = [str(s) for s in suggestions if s]
+
     return JobPostingResponse(
         bias_flags=parsed_flags,
-        overall_risk=scan_result.get("overall_risk", "low"),
-        suggestions=scan_result.get("suggestions", []),
-        rewritten_job=rewritten_job
+        overall_risk=str(scan_result.get("overall_risk", "low")),
+        suggestions=suggestions,
+        rewritten_job=rewritten_job,
     )

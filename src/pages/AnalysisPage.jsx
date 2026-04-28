@@ -92,6 +92,7 @@ export default function AnalysisPage() {
   const [decisionColumn, setDecisionColumn] = useState(null)
   const [protectedAttributes, setProtectedAttributes] = useState([])
   const [isScanning, setIsScanning] = useState(false)
+  const [scanError, setScanError] = useState(null)
 
   const tableColumns = useMemo(() => makeTableColumns(columns), [columns])
   const previewRows = useMemo(() => rows.slice(0, 5), [rows])
@@ -202,6 +203,7 @@ export default function AnalysisPage() {
     }
 
     setIsScanning(true)
+    setScanError(null)
     const toastId = toast.loading('Running bias analysis...')
 
     try {
@@ -213,15 +215,8 @@ export default function AnalysisPage() {
       navigate('/report')
     } catch (err) {
       console.error('Scan failed:', err)
-      // Backend might be down — store null and navigate with mock data
-      toast.error(
-        `Backend error: ${err.message || 'Could not connect to server'}. Showing demo results.`,
-        { id: toastId, duration: 4000 },
-      )
-      setResults(null) // ReportPage will fall back to mockResults
-      setDatasetFile(file)
-      setDebiasedResults(null)
-      setTimeout(() => navigate('/report'), 1500)
+      toast.dismiss(toastId)
+      setScanError(err.message || 'Could not connect to the backend server. Ensure it is running on http://localhost:8000.')
     } finally {
       setIsScanning(false)
     }
@@ -654,6 +649,26 @@ export default function AnalysisPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+
+                {scanError && (
+                  <div style={{
+                    width: '100%',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 8,
+                    padding: '14px 16px',
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start',
+                  }}>
+                    <AlertCircle size={18} color={danger} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <div style={{ fontWeight: 600, color: danger, fontSize: '0.9rem', marginBottom: 4 }}>Scan Failed</div>
+                      <div style={{ color: '#991b1b', fontSize: '0.82rem', lineHeight: 1.5, fontFamily: fontMono }}>{scanError}</div>
+                    </div>
+                  </div>
+                )}
+
                 <motion.button
                   whileHover={isScanning ? undefined : { scale: 1.02 }}
                   whileTap={isScanning ? undefined : { scale: 0.98 }}
@@ -693,14 +708,14 @@ export default function AnalysisPage() {
                     </>
                   ) : (
                     <>
-                      Run Bias Scan <ChevronRight size={16} />
+                      {scanError ? 'Try Again' : 'Run Bias Scan'} <ChevronRight size={16} />
                     </>
                   )}
                 </motion.button>
 
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => { setScanError(null); setCurrentStep(2) }}
                   style={{
                     border: 'none',
                     background: 'transparent',

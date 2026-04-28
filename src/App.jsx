@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ResultsProvider } from './context/ResultsContext'
 import Navbar from './components/Navbar'
@@ -9,6 +9,26 @@ import ReportComparisonPage from './pages/ReportComparisonPage'
 import AboutPage from './pages/AboutPage'
 import JobPostingPage from './pages/JobPostingPage'
 import DebiasPage from './pages/DebiasPage'
+import { AlertCircle } from 'lucide-react'
+
+function NotFoundPage() {
+  return (
+    <div style={{
+      minHeight: 'calc(100vh - 60px)', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', color: '#0f172a', fontFamily: "'Inter', sans-serif"
+    }}>
+      <AlertCircle size={48} color="#ef4444" style={{ marginBottom: 16 }} />
+      <h1 style={{ margin: '0 0 8px', fontSize: '2rem' }}>404 - Page Not Found</h1>
+      <p style={{ margin: '0 0 24px', color: '#64748b' }}>The page you are looking for does not exist.</p>
+      <Link to="/" style={{
+        background: '#2563eb', color: '#fff', textDecoration: 'none', padding: '10px 20px',
+        borderRadius: 8, fontWeight: 600
+      }}>
+        Return Home
+      </Link>
+    </div>
+  )
+}
 
 function AnimatedRoutes() {
   const location = useLocation()
@@ -30,6 +50,7 @@ function AnimatedRoutes() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/jobposting" element={<JobPostingPage />} />
           <Route path="/debias" element={<DebiasPage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </motion.div>
     </AnimatePresence>

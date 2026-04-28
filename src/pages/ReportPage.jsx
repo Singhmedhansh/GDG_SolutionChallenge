@@ -440,9 +440,13 @@ export default function ReportPage() {
   const breakdownInView = useInView(breakdownRef, { once: true, margin: '-60px' })
   const recommendationsInView = useInView(recommendationsRef, { once: true, margin: '-60px' })
 
-  const scoreTone = getScoreTone(data.fairnessScore)
+  const fairnessScore = typeof fairnessScore === 'number' ? fairnessScore : 0
+  const protectedAttributes = Array.isArray(protectedAttributes) ? protectedAttributes : []
+  const recommendations = Array.isArray(recommendations) ? recommendations : []
+  const flaggedProxies = Array.isArray(flaggedProxies) ? flaggedProxies : []
+  const scoreTone = getScoreTone(fairnessScore)
   const isUsingMock = !apiResults
-  const normalizedProxies = normalizeProxies(data.flaggedProxies)
+  const normalizedProxies = normalizeProxies(flaggedProxies)
 
   const handleDownloadReport = () => {
     const report = {
@@ -542,8 +546,8 @@ export default function ReportPage() {
           >
             <div style={{ width: 90, height: 90, flexShrink: 0 }}>
               <CircularProgressbar
-                value={data.fairnessScore}
-                text={`${data.fairnessScore}`}
+                value={fairnessScore}
+                text={`${fairnessScore}`}
                 styles={buildStyles({
                   pathColor: scoreTone.color,
                   trailColor: '#f1f5f9',
@@ -559,7 +563,7 @@ export default function ReportPage() {
                 fontSize: '1.8rem', fontWeight: 700,
                 color: scoreTone.color, lineHeight: 1.1,
               }}>
-                {data.fairnessScore}/100
+                {fairnessScore}/100
               </div>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -585,13 +589,13 @@ export default function ReportPage() {
               <ShieldAlert size={28} color="#2563eb" />
               <div>
                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '2.5rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
-                  {data.protectedAttributes.length}
+                  {protectedAttributes.length}
                 </div>
                 <div style={{ color: '#64748b', fontSize: '0.875rem', fontWeight: 500 }}>Attributes Scanned</div>
               </div>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {data.protectedAttributes.map((item) => (
+              {protectedAttributes.map((item) => (
                 <span
                   key={item.attribute}
                   style={{
@@ -618,7 +622,7 @@ export default function ReportPage() {
               <Flag size={28} color="#f59e0b" />
               <div>
                 <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '2.5rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>
-                  {data.flaggedProxies.length}
+                  {flaggedProxies.length}
                 </div>
                 <div style={{ color: '#64748b', fontSize: '0.875rem', fontWeight: 500 }}>Proxy Columns Flagged</div>
               </div>
@@ -748,7 +752,7 @@ export default function ReportPage() {
           <div style={pageStyles.sectionLabel}>Bias Breakdown</div>
           <div style={pageStyles.sectionTitle}>Approval rate comparison across protected groups</div>
 
-          {data.protectedAttributes.map((item) => (
+          {protectedAttributes.map((item) => (
             <motion.div
               key={item.attribute}
               initial={{ opacity: 0, y: 30 }}
@@ -813,13 +817,13 @@ export default function ReportPage() {
             transition={{ type: 'spring', stiffness: 80, damping: 18 }}
             style={{ ...pageStyles.card, padding: '24px' }}
           >
-            {data.recommendations.map((recommendation, index) => (
+            {recommendations.map((recommendation, index) => (
               <div
                 key={recommendation}
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: '14px',
                   padding: '14px 0',
-                  borderBottom: index === data.recommendations.length - 1 ? 'none' : '1px solid #f1f5f9',
+                  borderBottom: index === recommendations.length - 1 ? 'none' : '1px solid #f1f5f9',
                 }}
               >
                 <div style={{
