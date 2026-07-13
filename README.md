@@ -97,6 +97,8 @@ FairScan directly addresses three United Nations Sustainable Development Goals:
 
 ## 🛠️ Tech Stack
 
+
+
 ### Frontend
 | Technology | Version | Purpose |
 |---|---|---|
