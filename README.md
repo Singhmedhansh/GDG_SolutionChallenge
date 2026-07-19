@@ -56,6 +56,7 @@ FairScan acts as an early-warning system for HR teams, data scientists, and comp
 
 ## 🌍 UN SDG Alignment
 
+
 FairScan directly addresses three United Nations Sustainable Development Goals:
 
 | SDG | Goal | FairScan's Contribution |
@@ -495,7 +496,7 @@ A demo dataset is included at `public/demo_hiring.csv`.
 |---|---|---|
 | **Medhansh Singh** | [@Singhmedhansh](https://github.com/Singhmedhansh) | Frontend Engineer and GCP Deployment |
 | **Tanmay Angarkar** | [@angarkartanmay-ops](https://github.com/angarkartanmay-ops) | Backend Engineer |
-| **Jai Sharma** | [@Jaicoder-1](https://github.com/Jaicoder-1) | AI-ML Pipeline Build |
+| **Jai Sharma** | [@jaisharma07-ops(https://github.com/jaisharma07-ops) | AI-ML Pipeline Build |
 ---
 
 ## 📄 License
